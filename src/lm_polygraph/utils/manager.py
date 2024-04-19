@@ -417,6 +417,7 @@ class UEManager:
             for stat in background_train_stats_keys:
                 batch_stats[stat] = background_train_stats.pop(stat)
 
+            batch_stats["tokenizer"] = self.model.tokenizer
             batch_stats = self.calculate(batch_stats, self.stat_calculators, inp_texts)
 
             batch_estimations, bad_estimators = self.estimate(
@@ -608,13 +609,6 @@ class UEManager:
                         batch_stats[stat] = stat_value
 
                 for stat in batch_stats.keys():
-                    if stat in [
-                        "input_tokens",
-                        "input_texts",
-                        "target_texts",
-                        "target_tokens",
-                    ]:
-                        continue
                     if stat in train_stats.keys():
                         train_stats[stat].append(batch_stats[stat])
                     else:
