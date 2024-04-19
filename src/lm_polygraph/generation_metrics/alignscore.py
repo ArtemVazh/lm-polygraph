@@ -25,6 +25,7 @@ class AlignScore(GenerationMetric):
             device=device,
             ckpt_path=ckpt_path,
             evaluation_mode="nli_sp",
+            verbose=False
         )
 
     def __str__(self):
