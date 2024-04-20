@@ -468,6 +468,7 @@ class WhiteboxModel(Model):
             model_path,
             padding_side="left",
             add_bos_token=True,
+            model_max_length=1536,
             **kwargs,
         )
 
