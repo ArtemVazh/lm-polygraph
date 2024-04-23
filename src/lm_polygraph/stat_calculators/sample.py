@@ -38,12 +38,12 @@ class BlackboxSamplingGenerationCalculator(StatCalculator):
         Returns:
             Dict[str, np.ndarray]: dictionary with List[List[str]] sampled texts at 'blackbox_sample_texts' key.
         """
-
+        samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n) 
         if isinstance(model, BlackboxModel):
             samples = model.generate_texts(
                 input_texts=texts,
                 max_new_tokens=max_new_tokens,
-                n=self.samples_n,
+                n=samples_n,
             )
         else:
             samples = [[] for _ in range(len(texts))]
@@ -53,11 +53,11 @@ class BlackboxSamplingGenerationCalculator(StatCalculator):
                 min_length=2,
                 do_sample=True,
                 num_beams=1,
-                num_return_sequences=self.samples_n,
+                num_return_sequences=samples_n,
             )
             for i in range(len(texts)):
                 for j in range(self.samples_n):
-                    samples[i].append(out[i * self.samples_n + j])
+                    samples[i].append(out[i * samples_n + j])
 
         return {
             "blackbox_sample_texts": samples,
@@ -126,8 +126,9 @@ class SamplingGenerationCalculator(StatCalculator):
         """
         batch: Dict[str, torch.Tensor] = model.tokenize(texts)
         batch = {k: v.to(model.device()) for k, v in batch.items()}
+        samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n) 
         sequences, logits = _gen_samples(
-            self.samples_n,
+            samples_n,
             model,
             batch,
             output_scores=True,
@@ -157,7 +158,7 @@ class SamplingGenerationCalculator(StatCalculator):
         for i in range(len(logits)):
             log_prob, ll, toks = 0, [], []
             inp_size = (
-                len(batch["input_ids"][int(i / self.samples_n)])
+                len(batch["input_ids"][int(i / samples_n)])
                 if model.model_type == "CausalLM"
                 else 0
             )
@@ -169,10 +170,10 @@ class SamplingGenerationCalculator(StatCalculator):
                 ll.append(logits[i][j][cur_token].item())
                 toks.append(cur_token)
 
-            log_likelihoods[int(i / self.samples_n)].append(ll)
-            log_probs[int(i / self.samples_n)].append(log_prob)
-            tokens[int(i / self.samples_n)].append(toks)
-            texts[int(i / self.samples_n)].append(model.tokenizer.decode(toks))
+            log_likelihoods[int(i / samples_n)].append(ll)
+            log_probs[int(i / samples_n)].append(log_prob)
+            tokens[int(i / samples_n)].append(toks)
+            texts[int(i / samples_n)].append(model.tokenizer.decode(toks))
 
         return {
             "sample_log_likelihoods": log_likelihoods,
