@@ -38,7 +38,7 @@ class BlackboxSamplingGenerationCalculator(StatCalculator):
         Returns:
             Dict[str, np.ndarray]: dictionary with List[List[str]] sampled texts at 'blackbox_sample_texts' key.
         """
-        samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n) 
+        samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n)
         if isinstance(model, BlackboxModel):
             samples = model.generate_texts(
                 input_texts=texts,
@@ -126,7 +126,7 @@ class SamplingGenerationCalculator(StatCalculator):
         """
         batch: Dict[str, torch.Tensor] = model.tokenize(texts)
         batch = {k: v.to(model.device()) for k, v in batch.items()}
-        samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n) 
+        samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n)
         sequences, logits = _gen_samples(
             samples_n,
             model,

@@ -242,7 +242,12 @@ def _validate_args(args):
         )
 
     # remove arguments that are not supported by the HF model.generate function
-    keys_to_remove = ["presence_penalty", "generate_until", "allow_newlines", "samples_n"]
+    keys_to_remove = [
+        "presence_penalty",
+        "generate_until",
+        "allow_newlines",
+        "samples_n",
+    ]
     for key in keys_to_remove:
         args.pop(key, None)
 
@@ -492,7 +497,14 @@ class WhiteboxModel(Model):
             dict[str, torch.Tensor]: tensors dictionary obtained by tokenizing input texts batch.
         """
         model_type = self.model.config._name_or_path.lower()
-        if ("falcon" in model_type) or (("llama" in model_type) and (("chat" in model_type) or ("instruct" in model_type))) or ("vicuna" in model_type):
+        if (
+            ("falcon" in model_type)
+            or (
+                ("llama" in model_type)
+                and (("chat" in model_type) or ("instruct" in model_type))
+            )
+            or ("vicuna" in model_type)
+        ):
             prompted_texts = []
             for text in texts:
                 if "llama" in model_type:

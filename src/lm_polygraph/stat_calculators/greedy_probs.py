@@ -67,9 +67,9 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_greedy_log_likelihoods",
                 "embeddings",
                 "attention_features",
-                "train_attention_features", 
-                "train_greedy_tokens", 
-                "train_target_texts"
+                "train_attention_features",
+                "train_greedy_tokens",
+                "train_target_texts",
             ],
             [],
         )
@@ -166,16 +166,30 @@ class GreedyProbsCalculator(StatCalculator):
         attn_features = []
         for i in range(len(texts)):
             c = len(cut_sequences[i])
-            attn_mask = np.zeros(shape=(model.model.config.num_attention_heads * model.model.config.num_hidden_layers, c, c))
+            attn_mask = np.zeros(
+                shape=(
+                    model.model.config.num_attention_heads
+                    * model.model.config.num_hidden_layers,
+                    c,
+                    c,
+                )
+            )
             for j in range(1, c):
-                attn_mask[:, j, :j] = torch.vstack(
-                    [attentions[j][l][0][h][0][-j:]
-                     for l in range(len(attentions[j]))
-                     for h in range(len(attentions[j][l][0]))]).cpu().numpy()
+                attn_mask[:, j, :j] = (
+                    torch.vstack(
+                        [
+                            attentions[j][l][0][h][0][-j:]
+                            for l in range(len(attentions[j]))
+                            for h in range(len(attentions[j][l][0]))
+                        ]
+                    )
+                    .cpu()
+                    .numpy()
+                )
             for j in range(1, c):
-                attn_features.append(attn_mask[:, j, j-1])
+                attn_features.append(attn_mask[:, j, j - 1])
         attn_features = np.array(attn_features)
-        
+
         ll = []
         for i in range(len(texts)):
             log_probs = cut_logits[i]
