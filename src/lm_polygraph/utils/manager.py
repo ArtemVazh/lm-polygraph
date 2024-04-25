@@ -217,7 +217,7 @@ class UEManager:
         background_train_data: Dataset = None,
         ignore_exceptions: bool = True,
         ensemble_model: Optional[WhiteboxModel] = None,
-        deberta_batch_size: int = 10,
+        deberta_batch_size: int = 1,
         deberta_device: Optional[str] = None,
         verbose: bool = True,
         max_new_tokens: int = 100,
