@@ -165,6 +165,7 @@ class GreedyProbsCalculator(StatCalculator):
                 )
 
         attn_features = []
+        attention_all = []
         for i in range(len(texts)):
             c = len(cut_sequences[i])
             attn_mask = np.zeros(
@@ -189,9 +190,11 @@ class GreedyProbsCalculator(StatCalculator):
                 )
             for j in range(1, c):
                 attn_features.append(attn_mask[:, j, j - 1])
+            attention_all.append(attn_mask.max(0))
+            
         attn_features = np.array(attn_features)
-        attention_all = torch.max(torch.max(torch.cat([att.detach().cpu() for att in attentions]), dim=0)[0], dim=0)[0]
-
+        attention_all = np.array(attention_all)
+    
         ll = []
         for i in range(len(texts)):
             log_probs = cut_logits[i]
