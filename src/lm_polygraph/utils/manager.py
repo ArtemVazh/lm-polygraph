@@ -628,9 +628,12 @@ class UEManager:
                         item for sublist in train_stats[stat] for item in sublist
                     ]
                 else:
-                    result_train_stat[key_prefix + stat] = np.concatenate(
-                        train_stats[stat]
-                    )
+                    try:
+                        result_train_stat[key_prefix + stat] = np.concatenate(
+                            train_stats[stat]
+                        )
+                    except:
+                        continue
 
         return result_train_stat
 
