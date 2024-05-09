@@ -16,12 +16,13 @@ class AlignScore(GenerationMetric):
         self,
         lang="en",
         ckpt_path="https://huggingface.co/yzha/AlignScore/resolve/main/AlignScore-large.ckpt",
+        batch_size=16,
     ):
         super().__init__(["greedy_texts", "input_texts"], "sequence")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.scorer = AlignScorer(
             model="roberta-large",
-            batch_size=16,
+            batch_size=batch_size,
             device=device,
             ckpt_path=ckpt_path,
             evaluation_mode="nli_sp",
