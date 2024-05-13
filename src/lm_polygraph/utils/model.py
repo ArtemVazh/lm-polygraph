@@ -508,9 +508,8 @@ class WhiteboxModel(Model):
         model_type = self.model.config._name_or_path.lower()
         if (
             ("falcon" in model_type)
-            or (
-                ("llama" in model_type)
-                and (("chat" in model_type) or ("instruct" in model_type))
+            or (("llama" in model_type)
+                and ("chat" in model_type))
             )
             or ("vicuna" in model_type)
         ):
@@ -525,6 +524,23 @@ class WhiteboxModel(Model):
                     prompted_texts.append(prompted_text)
                 else:
                     prompted_texts.append(text)
+            tokenized = self.tokenizer(
+                prompted_texts,
+                truncation=True,
+                padding=True,
+                return_tensors="pt",
+                return_token_type_ids=False,
+            )
+        elif ("llama-3" in model_type and "instruct" in model_type) or ("stablelm" in model_type and "chat" in model_type):
+            prompted_texts = []
+            for text in texts:
+                messages = [{"role": "user", "content": text}]
+                text_with_prompt = self.tokenizer.apply_chat_template(
+                    messages,
+                    add_generation_prompt=True,
+                    tokenize=False
+                )
+                prompted_texts.append(text_with_prompt)
             tokenized = self.tokenizer(
                 prompted_texts,
                 truncation=True,
