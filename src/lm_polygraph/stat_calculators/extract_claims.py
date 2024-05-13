@@ -52,10 +52,13 @@ class ClaimsExtractor(StatCalculator):
                 "claims",
                 "claim_texts_concatenated",
                 "claim_input_texts_concatenated",
+                "train_claims",
             ],
             [
                 "greedy_texts",
                 "greedy_tokens",
+                "train_greedy_texts",
+                "train_greedy_tokens",
             ],
         )
         self.openai_chat = openai_chat

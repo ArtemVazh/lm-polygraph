@@ -69,8 +69,10 @@ class GreedyProbsCalculator(StatCalculator):
                 "attention_features",
                 "attention_weights",
                 "train_attention_features",
+                "train_greedy_texts",
                 "train_greedy_tokens",
                 "train_target_texts",
+                "train_input_texts",
             ],
             [],
         )
