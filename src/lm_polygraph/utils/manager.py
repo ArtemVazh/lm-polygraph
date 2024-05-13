@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import sys
 import gc
+import os
 
 from collections import defaultdict
 from typing import List, Set, Dict, Tuple, Optional
@@ -39,7 +40,8 @@ def _order_calculators(
         dependent = False
         if stat not in stat_dependencies.keys():
             raise Exception(
-                f"Cant find stat calculator for: {stat}. Maybe you forgot to register it by calling register()?"
+                f"Cant find stat calculator for: {stat}. Maybe you forgot to register it in "
+                + "lm_polygraph.utils.register_stat_calculators.register_stat_calculators()?"
             )
         for d in stat_dependencies[stat]:
             if d not in have_stats:
@@ -174,6 +176,14 @@ def estimate_uncertainty(
     return UncertaintyOutput(ue[0], input_text, texts[0], model.model_path)
 
 
+def _flatten_estimates(e, calculator_class):
+    if not isinstance(e, list) or not all(isinstance(x, list) for x in e):
+        raise Exception(
+            f"Class {calculator_class} returned {e}, expected list of lists"
+        )
+    return [ue for sample_ue in e for ue in sample_ue]
+
+
 class UEManager:
     """
     Manager to conduct uncertainty estimation experiments by using several uncertainty methods, ground-truth
@@ -222,6 +232,7 @@ class UEManager:
         verbose: bool = True,
         max_new_tokens: int = 100,
         background_train_dataset_max_new_tokens: int = 100,
+        cache_path=os.path.expanduser("~") + "/.cache",
     ):
         """
         Parameters:
@@ -247,6 +258,7 @@ class UEManager:
         stat_calculators_dict, stat_dependencies_dict = register_stat_calculators(
             deberta_batch_size=deberta_batch_size,
             deberta_device=deberta_device,
+            cache_path=cache_path,
         )
 
         self.stat_calculators_dict = stat_calculators_dict
@@ -434,7 +446,11 @@ class UEManager:
             for generation_metric in self.generation_metrics:
                 m = generation_metric(
                     batch_stats, target_texts=target_texts, target_tokens=target_tokens
-                ).tolist()
+                )
+                if not isinstance(m, list):
+                    m = m.tolist()
+                if generation_metric.level != "sequence":
+                    m = _flatten_estimates(m, generation_metric)
                 self.gen_metrics[generation_metric.level, str(generation_metric)] += m
                 batch_gen_metrics[generation_metric.level, str(generation_metric)] += m
 
@@ -557,7 +573,12 @@ class UEManager:
 
         for estimator in estimators:
             try:
-                e = estimator(batch_stats).tolist()
+                e = estimator(batch_stats)
+                if not isinstance(e, list):
+                    e = e.tolist()
+                if estimator.level != "sequence":
+                    e = _flatten_estimates(e, estimator)
+
                 self.estimations[estimator.level, str(estimator)] += e
                 batch_estimations[estimator.level, str(estimator)] += e
             except Exception as e:
