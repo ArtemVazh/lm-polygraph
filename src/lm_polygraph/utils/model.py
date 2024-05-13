@@ -510,7 +510,6 @@ class WhiteboxModel(Model):
             ("falcon" in model_type)
             or (("llama" in model_type)
                 and ("chat" in model_type))
-            )
             or ("vicuna" in model_type)
         ):
             prompted_texts = []

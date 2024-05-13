@@ -13,7 +13,7 @@ class OpenAIChat:
 
     def __init__(
         self,
-        openai_model: str = "gpt-4",
+        openai_model: str = "gpt-4-turbo-2024-04-09",
         cache_path: str = os.path.expanduser("~") + "/.cache",
     ):
         """
