@@ -22,6 +22,7 @@ class OpenAIChat:
             the model to use in OpenAI to chat.
         """
         api_key = os.environ.get("OPENAI_KEY", None)
+        self.http_proxy_url = os.environ.get("openai_http_proxy_url", None)
         if api_key is not None:
             openai.api_key = api_key
         self.openai_model = openai_model
@@ -55,10 +56,21 @@ class OpenAIChat:
                 {"role": "system", "content": "You are a intelligent assistant."},
                 {"role": "user", "content": message},
             ]
-            chat = openai.ChatCompletion.create(
-                model=self.openai_model, messages=messages
+            # chat = openai.ChatCompletion.create(
+            #     model=self.openai_model, messages=messages
+            # )
+            client = openai.OpenAI(
+                    # This is the default and can be omitted
+                    api_key=self.api_key,
+                    http_client=httpx.Client(proxies=self.http_proxy_url),
+            )   
+            response = client.chat.completions.create(
+                model=self.openai_model,
+                messages=messages,
             )
-            reply = chat.choices[0].message.content
+            
+            #reply = chat.choices[0].message.content
+            reply = response.choices[0].message.content
 
             # add reply to cache
             with self.cache_lock:
