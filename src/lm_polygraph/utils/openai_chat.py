@@ -1,6 +1,7 @@
 import openai
 import json
 import os
+import httpx
 
 from filelock import FileLock
 
