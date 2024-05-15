@@ -109,7 +109,7 @@ class TrainGreedyAlternativesNLICalculator(StatCalculator):
             [
                 "train_greedy_tokens_alternatives",
             ],
-            ["train_greedy_tokens_alternatives"],
+            ["train_greedy_tokens_alternatives_nli"],
         )
 
         self.nli_model = nli_model
