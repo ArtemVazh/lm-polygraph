@@ -107,9 +107,9 @@ class TrainGreedyAlternativesNLICalculator(StatCalculator):
     def __init__(self, nli_model):
         super().__init__(
             [
-                "train_greedy_tokens_alternatives",
+                "train_greedy_tokens_alternatives_nli",
             ],
-            ["train_greedy_tokens_alternatives_nli"],
+            ["train_greedy_tokens_alternatives"],
         )
 
         self.nli_model = nli_model
