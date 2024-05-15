@@ -7,7 +7,8 @@ from .sample import SamplingGenerationCalculator, BlackboxSamplingGenerationCalc
 from .greedy_alternatives_nli import (
     GreedyAlternativesNLICalculator,
     GreedyAlternativesFactPrefNLICalculator,
-    TrainGreedyAlternativesNLICalculator
+    TrainGreedyAlternativesNLICalculator,
+    TrainGreedyAlternativesFactPrefNLICalculator
 )
 from .bart_score import BartScoreCalculator
 from .model_score import ModelScoreCalculator

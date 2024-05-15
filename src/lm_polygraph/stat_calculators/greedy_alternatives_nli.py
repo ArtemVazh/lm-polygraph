@@ -232,3 +232,71 @@ class GreedyAlternativesFactPrefNLICalculator(StatCalculator):
             greedy_alternatives_nli.append(nli_matrixes)
 
         return {"greedy_tokens_alternatives_fact_pref_nli": greedy_alternatives_nli}
+
+
+class TrainGreedyAlternativesFactPrefNLICalculator(StatCalculator):
+    def __init__(self, nli_model):
+        super().__init__(
+            [
+                "train_greedy_tokens_alternatives_fact_pref_nli",
+            ],
+            [
+                "train_greedy_tokens_alternatives",
+                "train_greedy_tokens",
+                "train_claims",
+            ],
+        )
+
+        self.nli_model = nli_model
+
+    def _strip(self, w: str):
+        return w.strip(string.punctuation + " \n")
+
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+        **kwargs,
+    ) -> Dict[str, np.ndarray]:
+        greedy_alternatives = dependencies["greedy_tokens_alternatives"]
+        greedy_tokens = dependencies["greedy_tokens"]
+        claims = dependencies["claims"]
+        greedy_alternatives_nli = []
+        for sample_alternatives, sample_claims, sample_tokens in zip(
+            greedy_alternatives,
+            claims,
+            greedy_tokens,
+        ):
+            nli_queue = []
+            for claim in sample_claims:
+                tokens = [sample_tokens[t] for t in claim.aligned_tokens]
+                alts = [sample_alternatives[t] for t in claim.aligned_tokens]
+                for i in range(len(tokens)):
+                    for j in range(len(alts[i])):
+                        text1 = model.tokenizer.decode(tokens[: i + 1])
+                        text2 = model.tokenizer.decode(tokens[:i] + [alts[i][j][0]])
+                        nli_queue.append((text1, text2))
+                        nli_queue.append((text2, text1))
+
+            nli_classes = _eval_nli_model(nli_queue, self.nli_model)
+
+            nli_matrixes = []
+            for claim in sample_claims:
+                nli_matrixes.append([])
+                tokens = [sample_tokens[t] for t in claim.aligned_tokens]
+                alts = [sample_alternatives[t] for t in claim.aligned_tokens]
+                for i in range(len(tokens)):
+                    nli_matrix = []
+                    for _ in range(len(alts[i])):
+                        nli_matrix.append([])
+                        for j in range(len(alts[i])):
+                            nli_matrix[-1].append(None)
+                    for j in range(len(alts[i])):
+                        nli_matrix[0][j], nli_matrix[j][0] = nli_classes[:2]
+                        nli_classes = nli_classes[2:]
+                    nli_matrixes[-1].append(nli_matrix)
+            greedy_alternatives_nli.append(nli_matrixes)
+
+        return {"greedy_tokens_alternatives_fact_pref_nli": greedy_alternatives_nli}

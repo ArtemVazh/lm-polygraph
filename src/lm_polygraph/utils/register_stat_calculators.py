@@ -73,6 +73,7 @@ def register_stat_calculators(
     _register(GreedyProbsCalculator(n_alternatives=n_ccp_alternatives))
     _register(GreedyAlternativesNLICalculator(nli_model=nli_model))
     _register(TrainGreedyAlternativesNLICalculator(nli_model=nli_model))
+    _register(TrainGreedyAlternativesFactPrefNLICalculator(nli_model=nli_model))
     _register(GreedyAlternativesFactPrefNLICalculator(nli_model=nli_model))
     _register(ClaimsExtractor(openai_chat=openai_chat))
 
