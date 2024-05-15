@@ -73,6 +73,7 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_greedy_tokens",
                 "train_target_texts",
                 "train_input_texts",
+                "train_greedy_tokens_alternatives",
             ],
             [],
         )

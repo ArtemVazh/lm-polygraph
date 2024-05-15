@@ -103,6 +103,68 @@ class GreedyAlternativesNLICalculator(StatCalculator):
 
         return {"greedy_tokens_alternatives_nli": greedy_alternatives_nli}
 
+class TrainGreedyAlternativesNLICalculator(StatCalculator):
+    def __init__(self, nli_model):
+        super().__init__(
+            [
+                "train_greedy_tokens_alternatives",
+            ],
+            ["train_greedy_tokens_alternatives"],
+        )
+
+        self.nli_model = nli_model
+
+    def _strip(self, w: str):
+        return w.strip(string.punctuation + " \n")
+
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+        **kwargs,
+    ) -> Dict[str, np.ndarray]:
+        greedy_alternatives = dependencies["greedy_tokens_alternatives"]
+        greedy_alternatives_nli = []
+        for sample_alternatives in greedy_alternatives:
+            nli_matrixes = []
+            for w_number, word_alternatives in enumerate(sample_alternatives):
+                nli_queue = []
+                nli_matrix = [
+                    ["" for _ in range(len(word_alternatives))]
+                    for _ in range(len(word_alternatives))
+                ]
+                if len(word_alternatives) > 0 and not isinstance(
+                    word_alternatives[0][0],
+                    str,
+                ):
+                    word_alternatives = [
+                        (model.tokenizer.decode([alt]), prob)
+                        for alt, prob in word_alternatives
+                    ]
+                words = [self._strip(alt[0]) for alt in word_alternatives]
+                for wi in words:
+                    nli_queue.append((words[0], wi))
+                    nli_queue.append((wi, words[0]))
+
+                nli_classes = _eval_nli_model(nli_queue, self.nli_model)
+                nli_class = defaultdict(lambda: None)
+                for nli_cl, (w1, w2) in zip(nli_classes, nli_queue):
+                    nli_class[w1, w2] = nli_cl
+
+                for i, wi in enumerate(words):
+                    for j, wj in enumerate(words):
+                        # Only calculate NLI with greedy token
+                        if i > 0 and j > 0:
+                            continue
+                        nli_matrix[i][j] = nli_class[wi, wj]
+
+                nli_matrixes.append(nli_matrix)
+            greedy_alternatives_nli.append(nli_matrixes)
+
+        return {"greedy_tokens_alternatives_nli": greedy_alternatives_nli}
+
 
 class GreedyAlternativesFactPrefNLICalculator(StatCalculator):
     def __init__(self, nli_model):
