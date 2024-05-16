@@ -242,7 +242,7 @@ class GreedyProbsCalculator(StatCalculator):
             "attention_features": attn_features,
             "attention_weights": attention_all,
             "attention_max_features": attn_features_max,
-            "attention_max_features_token": attention_max_features_tokens,
+            "attention_max_features_token": attn_features_max_tokens,
         }
         result_dict.update(embeddings_dict)
 
