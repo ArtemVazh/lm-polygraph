@@ -67,8 +67,12 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_greedy_log_likelihoods",
                 "embeddings",
                 "attention_features",
+                "attention_max_features",
                 "attention_weights",
+                "attention_max_features_token",
                 "train_attention_features",
+                "train_attention_max_features",
+                "train_attention_max_features_token",
                 "train_greedy_texts",
                 "train_greedy_tokens",
                 "train_target_texts",
@@ -168,6 +172,8 @@ class GreedyProbsCalculator(StatCalculator):
                 )
 
         attn_features = []
+        attn_features_max = []
+        attn_features_max_tokens = []
         attention_all = []
         for i in range(len(texts)):
             c = len(cut_sequences[i])
@@ -191,9 +197,17 @@ class GreedyProbsCalculator(StatCalculator):
                     .cpu()
                     .numpy()
                 )
+
+            attention_all.append(attn_mask.max(0))
+            attention_max_features_token = attn_mask.max(0).argmax(0)
+            
             for j in range(1, c):
                 attn_features.append(attn_mask[:, j, j - 1])
-            attention_all.append(attn_mask.max(0))
+                attn_features_max.append(attn_mask[:, j, attention_max_features_token[j]])
+                
+            attn_features_max_tokens.append(attention_max_features_token)
+                
+            
             
         attn_features = np.array(attn_features)
         attention_all = np.array(attention_all)
@@ -226,7 +240,9 @@ class GreedyProbsCalculator(StatCalculator):
             "greedy_texts": cut_texts,
             "greedy_log_likelihoods": ll,
             "attention_features": attn_features,
-            "attention_weights": attention_all
+            "attention_weights": attention_all,
+            "attn_features_max": attn_features_max,
+            "attention_max_features_token": attention_max_features_tokens,
         }
         result_dict.update(embeddings_dict)
 
