@@ -199,7 +199,7 @@ class GreedyProbsCalculator(StatCalculator):
                 )
 
             attention_all.append(attn_mask.max(0))
-            attention_max_features_token = attn_mask.max(0).argmax(0)
+            attention_max_features_token = attn_mask.max(0).argmax(1)
             
             for j in range(1, c):
                 attn_features.append(attn_mask[:, j, j - 1])
