@@ -207,7 +207,7 @@ class GreedyProbsCalculator(StatCalculator):
             
             for j in range(1, c):
                 attn_features.append(attn_mask[:, j, j - 1])
-                for i in range(3):
+                for k in range(3):
                     attn_features_max.append(attn_mask[:, j, topk.indices[j][k]])
                     attn_features_max_values.append(topk.values[j][k])
                 
