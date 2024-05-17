@@ -203,7 +203,7 @@ class GreedyProbsCalculator(StatCalculator):
 
             attention_all.append(attn_mask.max(0))
             attention_max_features_token = attn_mask.max(0).argmax(1)
-            topk = torch.topk(torch.tensor(attn_mask.max(0)), k=3, , dim=1)
+            topk = torch.topk(torch.tensor(attn_mask.max(0)), k=3, dim=1)
             
             for j in range(1, c):
                 attn_features.append(attn_mask[:, j, j - 1])
