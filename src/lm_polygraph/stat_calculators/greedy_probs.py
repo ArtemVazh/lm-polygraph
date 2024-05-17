@@ -68,10 +68,12 @@ class GreedyProbsCalculator(StatCalculator):
                 "embeddings",
                 "attention_features",
                 "attention_max_features",
+                "attention_max_features_values",
                 "attention_weights",
                 "attention_max_features_token",
                 "train_attention_features",
                 "train_attention_max_features",
+                "train_attention_max_features_values",
                 "train_attention_max_features_token",
                 "train_greedy_texts",
                 "train_greedy_tokens",
@@ -174,6 +176,7 @@ class GreedyProbsCalculator(StatCalculator):
         attn_features = []
         attn_features_max = []
         attn_features_max_tokens = []
+        attn_features_max_values = []
         attention_all = []
         for i in range(len(texts)):
             c = len(cut_sequences[i])
@@ -200,14 +203,15 @@ class GreedyProbsCalculator(StatCalculator):
 
             attention_all.append(attn_mask.max(0))
             attention_max_features_token = attn_mask.max(0).argmax(1)
+            topk = torch.topk(torch.tensor(attn_mask.max(0)), k=3, , dim=1)
             
             for j in range(1, c):
                 attn_features.append(attn_mask[:, j, j - 1])
-                attn_features_max.append(attn_mask[:, j, attention_max_features_token[j]])
+                for i in range(3):
+                    attn_features_max.append(attn_mask[:, j, topk.indices[j][k]])
+                    attn_features_max_values.append(topk.values[j][k])
                 
             attn_features_max_tokens.append(attention_max_features_token)
-                
-            
             
         attn_features = np.array(attn_features)
         attention_all = np.array(attention_all)
@@ -243,6 +247,7 @@ class GreedyProbsCalculator(StatCalculator):
             "attention_weights": attention_all,
             "attention_max_features": attn_features_max,
             "attention_max_features_token": attn_features_max_tokens,
+            "attention_max_features_values": attn_features_max_values,
         }
         result_dict.update(embeddings_dict)
 
