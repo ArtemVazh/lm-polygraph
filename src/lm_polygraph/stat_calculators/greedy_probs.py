@@ -80,6 +80,8 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_target_texts",
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
+                # "attention_all",
+                # "train_attention_all"
             ],
             [],
         )
@@ -178,6 +180,7 @@ class GreedyProbsCalculator(StatCalculator):
         attn_features_max_tokens = []
         attn_features_max_values = []
         attention_all = []
+        # attn = []
         for i in range(len(texts)):
             c = len(cut_sequences[i])
             attn_mask = np.zeros(
@@ -202,11 +205,11 @@ class GreedyProbsCalculator(StatCalculator):
                 )
 
             attention_all.append(attn_mask.max(0))
+            # attn.append(attn_mask.transpose(1,2,0))
             
             top_n = min(3, attn_mask.max(0).shape[1])
             topk = torch.topk(torch.tensor(attn_mask.max(0)), k=top_n, dim=1)
-
-
+                        
             attn_features_max_values_s = []
             attention_max_features_token_s = []
             for j in range(1, c):
@@ -259,6 +262,7 @@ class GreedyProbsCalculator(StatCalculator):
             "attention_max_features": attn_features_max,
             "attention_max_features_token": attn_features_max_tokens,
             "attention_max_features_values": attn_features_max_values,
+            # "attention_all": attn
         }
         result_dict.update(embeddings_dict)
 
