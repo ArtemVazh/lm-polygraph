@@ -5,27 +5,23 @@ from typing import List, Dict
 from lm_polygraph.utils.openai_chat import OpenAIChat
 from .generation_metric import GenerationMetric
 
-OPENAI_FACT_CHECK_PROMPT = (
-    "Is the claim correct according to the most "
-    "recent sources of information? "
-    """Answer "True", "False" or "Not known"."""
-    "\n\n"
-    "Examples:\n"
-    "\n"
-    "Question: Tell me a bio of Albert Einstein.\n"
-    "Claim: He was born on 14 March.\n"
-    "Answer: True\n"
-    "\n"
-    "Question: Tell me a bio of Albert Einstein.\n"
-    "Claim: He was born in United Kingdom.\n"
-    "Answer: False\n"
-    "\n"
-    "Your input:\n"
-    "\n"
-    "Question: {input}\n"
-    "Claim: {claim}\n"
-    "Answer: "
-)
+OPENAI_FACT_CHECK_PROMPT = """Question: {input}
+ 
+Determine if all provided information in the following claim is true according to the most recent sources of information.
+ 
+Claim: {claim}
+"""
+ 
+OPENAI_FACT_CHECK_SUMMARIZE_PROMPT = """Question: {input}
+ 
+Claim: {claim}
+ 
+Is the following claim true?
+ 
+Reply: {reply}
+ 
+Summarize this reply into one word, whether the claim is true: "True", "False" or "Not known".
+"""
 
 
 class OpenAIFactCheck(GenerationMetric):
@@ -36,7 +32,7 @@ class OpenAIFactCheck(GenerationMetric):
 
     def __init__(
         self,
-        openai_model: str = "gpt-4-turbo-2024-04-09",
+        openai_model: str = "gpt-4",
         cache_path: str = os.path.expanduser("~") + "/.cache",
     ):
         super().__init__(["input_texts"], "claim")
@@ -52,10 +48,17 @@ class OpenAIFactCheck(GenerationMetric):
                 input=input,
             )
         )
+        reply = openai_chat.ask(
+            OPENAI_FACT_CHECK_SUMMARIZE_PROMPT.format(
+                claim=claim,
+                input=input,
+                reply=reply,
+            )
+        )
         reply = reply.strip()
-        if reply == "True":
+        if reply.endswith('True') or reply.endswith('"True"'):
             return 0
-        elif reply == "False":
+        elif reply.endswith('False') or reply.endswith('"False"'):
             return 1
         else:
             return np.nan

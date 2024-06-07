@@ -21,7 +21,7 @@ def register_stat_calculators(
     stat_dependencies: Dict[str, List[str]] = {}
 
     nli_model = Deberta(batch_size=deberta_batch_size, device=deberta_device)
-    openai_chat = OpenAIChat(cache_path=cache_path)
+    openai_chat = OpenAIChat(openai_model="gpt-4o", cache_path=cache_path)
 
     def _register(calculator_class: StatCalculator):
         for stat in calculator_class.stats:

@@ -4,6 +4,7 @@ import torch
 import sys
 import gc
 import os
+import time
 
 from collections import defaultdict
 from typing import List, Set, Dict, Tuple, Optional
@@ -375,6 +376,7 @@ class UEManager:
         self.metrics: Dict[Tuple[str, str, str, str], float] = {}
         self.total_bad_estimators: Dict[Estimator, float] = {}
         self.stats: Dict[str, List] = defaultdict(list)
+        self.time_stats: Dict[str, List] = defaultdict(list)
 
         self.processors = processors
         self.ignore_exceptions = ignore_exceptions
@@ -407,6 +409,7 @@ class UEManager:
         background_train_stats = self._extract_train_embeddings(background=True)
 
         iterable_data = tqdm(self.data) if self.verbose else self.data
+        
         for batch_i, (inp_texts, target_texts) in enumerate(iterable_data):
             batch_stats: Dict[str, np.ndarray] = {}
             for key, val in [
@@ -532,15 +535,21 @@ class UEManager:
             calculators (list): list of stat calculators to run
             inp_texts (list): list of inputs to the model in the batch
         """
+        
         for stat_calculator in calculators:
             try:
+                start = time.time()
                 new_stats = stat_calculator(
                     batch_stats, inp_texts, self.model, self.max_new_tokens
                 )
+                end = time.time()
+
                 for stat, stat_value in new_stats.items():
                     if stat in batch_stats.keys():
                         continue
                     batch_stats[stat] = stat_value
+                    self.time_stats[stat] += [end - start]
+                        
                     if (f"blackbox_{stat}" in self.stat_calculators_dict.keys()) and (
                         f"blackbox_{stat}" in self.stats_names
                     ):
@@ -573,7 +582,9 @@ class UEManager:
 
         for estimator in estimators:
             try:
+                start = time.time()
                 e = estimator(batch_stats)
+                end = time.time()
                 if not isinstance(e, list):
                     e = e.tolist()
                 if estimator.level != "sequence":
@@ -581,6 +592,8 @@ class UEManager:
 
                 self.estimations[estimator.level, str(estimator)] += e
                 batch_estimations[estimator.level, str(estimator)] += e
+                self.time_stats[str(estimator)] += [end - start]
+                        
             except Exception as e:
                 if self.ignore_exceptions:
                     bad_estimators.append(estimator)
@@ -687,6 +700,7 @@ class UEManager:
                 "gen_metrics": self.gen_metrics,
                 "estimations": self.estimations,
                 "stats": self.stats,
+                "time_stats": self.time_stats,
             },
             save_path,
         )

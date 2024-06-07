@@ -530,7 +530,7 @@ class WhiteboxModel(Model):
                 return_tensors="pt",
                 return_token_type_ids=False,
             )
-        elif ("llama-3" in model_type and "instruct" in model_type) or ("stablelm" in model_type and "chat" in model_type):
+        elif ("llama-3" in model_type and "instruct" in model_type) or ("stablelm" in model_type and "chat" in model_type) or ("mistral" in model_type and "instruct" in model_type):
             prompted_texts = []
             for text in texts:
                 messages = [{"role": "user", "content": text}]

@@ -67,21 +67,21 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_greedy_log_likelihoods",
                 "embeddings",
                 "attention_features",
-                "attention_max_features",
-                "attention_max_features_values",
                 "attention_weights",
-                "attention_max_features_token",
+                # "attention_max_features",
+                # "attention_max_features_values",
+                # "attention_max_features_token",
                 "train_attention_features",
-                "train_attention_max_features",
-                "train_attention_max_features_values",
-                "train_attention_max_features_token",
+                # "train_attention_max_features",
+                # "train_attention_max_features_values",
+                # "train_attention_max_features_token",
                 "train_greedy_texts",
                 "train_greedy_tokens",
                 "train_target_texts",
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
-                # "attention_all",
-                # "train_attention_all"
+                #"attention_all",
+                #"train_attention_all"
             ],
             [],
         )
@@ -176,11 +176,11 @@ class GreedyProbsCalculator(StatCalculator):
                 )
 
         attn_features = []
-        attn_features_max = []
-        attn_features_max_tokens = []
-        attn_features_max_values = []
+        # attn_features_max = []
+        # attn_features_max_tokens = []
+        # attn_features_max_values = []
         attention_all = []
-        # attn = []
+        #attn = []
         for i in range(len(texts)):
             c = len(cut_sequences[i])
             attn_mask = np.zeros(
@@ -205,27 +205,27 @@ class GreedyProbsCalculator(StatCalculator):
                 )
 
             attention_all.append(attn_mask.max(0))
-            # attn.append(attn_mask.transpose(1,2,0))
+            #attn.append(attn_mask.transpose(1,2,0))
             
-            top_n = min(3, attn_mask.max(0).shape[1])
-            topk = torch.topk(torch.tensor(attn_mask.max(0)), k=top_n, dim=1)
+            # top_n = min(3, attn_mask.max(0).shape[1])
+            # topk = torch.topk(torch.tensor(attn_mask.max(0)), k=top_n, dim=1)
                         
-            attn_features_max_values_s = []
-            attention_max_features_token_s = []
+            # attn_features_max_values_s = []
+            # attention_max_features_token_s = []
             for j in range(1, c):
                 attn_features.append(attn_mask[:, j, j - 1])
-                attn_features_max_values_i = []
-                attention_max_features_token_i = []
-                for k in range(top_n):
-                    attn_features_max.append(attn_mask[:, j, topk.indices[j][k].item()])
-                    attn_features_max_values_i.append(topk.values[j][k].item())
-                    attention_max_features_token_i.append(topk.indices[j][k].item())
+                # attn_features_max_values_i = []
+                # attention_max_features_token_i = []
+                # for k in range(top_n):
+                #     attn_features_max.append(attn_mask[:, j, topk.indices[j][k].item()])
+                #     attn_features_max_values_i.append(topk.values[j][k].item())
+                #     attention_max_features_token_i.append(topk.indices[j][k].item())
 
-                attn_features_max_values_s.append(attn_features_max_values_i)
-                attention_max_features_token_s.append(attention_max_features_token_i)
+                # attn_features_max_values_s.append(attn_features_max_values_i)
+                # attention_max_features_token_s.append(attention_max_features_token_i)
 
-        attn_features_max_values.append(attn_features_max_values_s)
-        attn_features_max_tokens.append(attention_max_features_token_s)
+        # attn_features_max_values.append(attn_features_max_values_s)
+        # attn_features_max_tokens.append(attention_max_features_token_s)
 
         attn_features = np.array(attn_features)
         attention_all = np.array(attention_all)
@@ -259,10 +259,10 @@ class GreedyProbsCalculator(StatCalculator):
             "greedy_log_likelihoods": ll,
             "attention_features": attn_features,
             "attention_weights": attention_all,
-            "attention_max_features": attn_features_max,
-            "attention_max_features_token": attn_features_max_tokens,
-            "attention_max_features_values": attn_features_max_values,
-            # "attention_all": attn
+            #"attention_max_features": attn_features_max,
+            #"attention_max_features_token": attn_features_max_tokens,
+            #"attention_max_features_values": attn_features_max_values,
+            #"attention_all": attn
         }
         result_dict.update(embeddings_dict)
 
