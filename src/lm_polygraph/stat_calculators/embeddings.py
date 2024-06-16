@@ -19,6 +19,7 @@ def get_embeddings_from_output(
 ):
     batch_embeddings = None
     batch_embeddings_decoder = None
+    token_embeddings_decoder = None
     batch_size = len(batch["input_ids"])
 
     if model_type == "CausalLM":
@@ -41,6 +42,11 @@ def get_embeddings_from_output(
             batch_embeddings_decoder = (
                 torch.cat([input_tokens_hs, generated_tokens_hs], dim=1)
                 .mean(axis=1)
+                .cpu()
+                .detach()
+            )
+            token_embeddings_decoder = (
+                torch.cat([input_tokens_hs[:, -1:], generated_tokens_hs], dim=1)
                 .cpu()
                 .detach()
             )
@@ -146,7 +152,7 @@ def get_embeddings_from_output(
     else:
         raise NotImplementedError
 
-    return batch_embeddings, batch_embeddings_decoder
+    return batch_embeddings, batch_embeddings_decoder, token_embeddings_decoder
 
 
 def aggregate(x, aggregation_method, axis):
@@ -193,13 +199,18 @@ class EmbeddingsCalculator(StatCalculator):
                     ]
                 ),
             )
-            embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
+            embeddings_encoder, embeddings_decoder, token_embeddings_decoder = get_embeddings_from_output(
                 out, batch, model.model_type
             )
+            if token_embeddings_decoder is None:
+                token_embeddings_decoder = torch.empty((0,embeddings_decoder.shape[-1]), dtype=torch.float32)
+            else:
+                token_embeddings_decoder = token_embeddings_decoder[0, 1:]
 
         if model.model_type == "CausalLM":
             return {
                 "embeddings_decoder": embeddings_decoder.cpu().detach().numpy(),
+                "token_embeddings_decoder": token_embeddings_decoder.cpu().detach().numpy(),
             }
         elif model.model_type == "Seq2SeqLM":
             return {

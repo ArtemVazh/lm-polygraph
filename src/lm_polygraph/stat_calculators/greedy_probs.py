@@ -139,9 +139,13 @@ class GreedyProbsCalculator(StatCalculator):
 
             attentions = out.attentions
             sequences = out.sequences
-            embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
+            embeddings_encoder, embeddings_decoder, token_embeddings_decoder = get_embeddings_from_output(
                 out, batch, model.model_type
             )
+            if token_embeddings_decoder is None:
+                token_embeddings_decoder = torch.empty((0,embeddings_decoder.shape[-1]), dtype=torch.float32)
+            else:
+                token_embeddings_decoder = token_embeddings_decoder[0, 1:]
 
         cut_logits = []
         cut_sequences = []
@@ -240,6 +244,7 @@ class GreedyProbsCalculator(StatCalculator):
         if model.model_type == "CausalLM":
             embeddings_dict = {
                 "embeddings_decoder": embeddings_decoder,
+                "token_embeddings_decoder": token_embeddings_decoder,
             }
         elif model.model_type == "Seq2SeqLM":
             embeddings_dict = {
