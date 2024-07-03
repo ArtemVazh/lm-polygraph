@@ -165,12 +165,11 @@ def aggregate(x, aggregation_method, axis):
         return x.mean(axis=axis)
     elif aggregation_method == "sum":
         return x.sum(axis=axis)
-
-
-class EmbeddingsCalculator(StatCalculator):
-    def __init__(self, hidden_layer = -1):
-        super().__init__(["train_embeddings", "background_train_embeddings"], [])
-        self.hidden_layer = hidden_layer
+    
+    
+class AllEmbeddingsCalculator(StatCalculator):
+    def __init__(self):
+        super().__init__(["embeddings_all"], [])
 
     def __call__(
         self,
@@ -202,23 +201,72 @@ class EmbeddingsCalculator(StatCalculator):
                     ]
                 ),
             )
+             
+        if model.model_type == "CausalLM":
+            return {
+                "embeddings_all_decoder": out.hidden_states,
+            }
+        elif model.model_type == "Seq2SeqLM":
+            return {
+                "embeddings_all_encoder": out.encoder_hidden_states,
+                "embeddings_all_decoder": out.decoder_hidden_states,
+            }
+        else:
+            raise NotImplementedError
+        
+class OutputWrapper:
+    hidden_states = None
+    encoder_hidden_states = None
+    decoder_hidden_states = None
+
+class EmbeddingsCalculator(StatCalculator):
+    def __init__(self, hidden_layer = -1):
+        self.hidden_layer = hidden_layer
+        if self.hidden_layer == -1:
+            super().__init__(["train_embeddings", "background_train_embeddings", "train_token_embeddings", "background_token_train_embeddings"], ["embeddings_all"])
+        else:
+            super().__init__([f"embeddings_{self.hidden_layer}", f"train_embeddings_{self.hidden_layer}", f"background_train_embeddings_{self.hidden_layer}",
+                              f"token_embeddings_{self.hidden_layer}", f"train_token_embeddings_{self.hidden_layer}", f"background_train_token_embeddings_{self.hidden_layer}"], ["embeddings_all"])
+
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+    ) -> Dict[str, np.ndarray]:
+        batch: Dict[str, torch.Tensor] = model.tokenize(texts)
+        batch = {k: v.to(model.device()) for k, v in batch.items()}
+        with torch.no_grad():
+            out = OutputWrapper()
+            if model.model_type == "CausalLM":
+                out.hidden_states = dependencies["embeddings_all_decoder"]
+            elif model.model_type == "Seq2SeqLM":
+                out.decoder_hidden_states = dependencies["embeddings_all_decoder"]
+                out.encoder_hidden_states = dependencies["embeddings_all_encoder"]
+            
             embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
                 out, batch, model.model_type, level="sequence", hidden_layer=self.hidden_layer
             )
             token_embeddings_encoder, token_embeddings_decoder = get_embeddings_from_output(
                 out, batch, model.model_type, level="token", hidden_layer=self.hidden_layer
             )
-            
             if token_embeddings_decoder is None:
                 token_embeddings_decoder = torch.empty((0, embeddings_decoder.shape[-1]), dtype=torch.float32)
-            else:
-                token_embeddings_decoder = token_embeddings_decoder[0]
+            elif len(token_embeddings_decoder.shape) == 3:
+                token_embeddings_decoder = token_embeddings_decoder.reshape(-1, token_embeddings_decoder.shape[-1])
 
         if model.model_type == "CausalLM":
-            return {
-                "embeddings_decoder": embeddings_decoder.cpu().detach().numpy(),
-                "token_embeddings_decoder": token_embeddings_decoder.cpu().detach().numpy(),
-            }
+            if self.hidden_layer == -1:
+                return {
+                    "embeddings_decoder": embeddings_decoder.cpu().detach().numpy(),
+                    "token_embeddings_decoder": token_embeddings_decoder.cpu().detach().numpy(),
+                }
+            else:
+                return {
+                    f"embeddings_decoder_{self.hidden_layer}": embeddings_decoder.cpu().detach().numpy(),
+                    f"token_embeddings_decoder_{self.hidden_layer}": token_embeddings_decoder.cpu().detach().numpy(),
+                }
         elif model.model_type == "Seq2SeqLM":
             return {
                 "embeddings_encoder": embeddings_encoder.cpu().detach().numpy(),

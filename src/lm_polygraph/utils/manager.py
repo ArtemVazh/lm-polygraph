@@ -278,6 +278,7 @@ class UEManager:
             deberta_batch_size=deberta_batch_size,
             deberta_device=deberta_device,
             cache_path=cache_path,
+            model=model,
         )
 
         self.stat_calculators_dict = stat_calculators_dict
@@ -663,6 +664,8 @@ class UEManager:
                         batch_stats[stat] = stat_value
 
                 for stat in batch_stats.keys():
+                    if "embeddings_all" in stat:
+                        continue
                     if stat in train_stats.keys():
                         train_stats[stat].append(batch_stats[stat])
                     else:

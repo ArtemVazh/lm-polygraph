@@ -12,6 +12,7 @@ def register_stat_calculators(
     deberta_device: Optional[str] = None,  # TODO: rename to NLI model
     n_ccp_alternatives: int = 10,
     cache_path=os.path.expanduser("~") + "/.cache",
+    model=None,
 ) -> Tuple[Dict[str, "StatCalculator"], Dict[str, List[str]]]:
     """
     Registers all available statistic calculators to be seen by UEManager for properly organizing the calculations
@@ -66,7 +67,10 @@ def register_stat_calculators(
     _register(BlackboxSamplingGenerationCalculator())
     _register(BartScoreCalculator())
     _register(ModelScoreCalculator())
+    _register(AllEmbeddingsCalculator())
     _register(EmbeddingsCalculator())
+    for layer in range(model.model.config.num_hidden_layers - 1):
+        _register(EmbeddingsCalculator(hidden_layer=layer))
     _register(EnsembleTokenLevelDataCalculator())
     _register(SemanticMatrixCalculator(nli_model=nli_model))
     _register(CrossEncoderSimilarityMatrixCalculator(nli_model=nli_model))
@@ -76,5 +80,4 @@ def register_stat_calculators(
     _register(TrainGreedyAlternativesFactPrefNLICalculator(nli_model=nli_model))
     _register(GreedyAlternativesFactPrefNLICalculator(nli_model=nli_model))
     _register(ClaimsExtractor(openai_chat=openai_chat))
-
     return stat_calculators, stat_dependencies

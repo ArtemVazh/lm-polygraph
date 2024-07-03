@@ -66,6 +66,7 @@ class GreedyProbsCalculator(StatCalculator):
                 "greedy_log_likelihoods",
                 "train_greedy_log_likelihoods",
                 "embeddings",
+                "token_embeddings",
                 "attention_features",
                 "attention_weights",
                 # "attention_max_features",
@@ -147,8 +148,8 @@ class GreedyProbsCalculator(StatCalculator):
             )
             if token_embeddings_decoder is None:
                 token_embeddings_decoder = torch.empty((0,embeddings_decoder.shape[-1]), dtype=torch.float32)
-            else:
-                token_embeddings_decoder = token_embeddings_decoder[0]
+            elif len(token_embeddings_decoder.shape) == 3:
+                token_embeddings_decoder = token_embeddings_decoder.reshape(-1, token_embeddings_decoder.shape[-1])
             
         cut_logits = []
         cut_sequences = []

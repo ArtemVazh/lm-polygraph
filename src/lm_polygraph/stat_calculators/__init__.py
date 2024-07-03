@@ -12,7 +12,7 @@ from .greedy_alternatives_nli import (
 )
 from .bart_score import BartScoreCalculator
 from .model_score import ModelScoreCalculator
-from .embeddings import EmbeddingsCalculator
+from .embeddings import EmbeddingsCalculator, AllEmbeddingsCalculator
 from .ensemble_token_data import EnsembleTokenLevelDataCalculator
 from .semantic_matrix import SemanticMatrixCalculator
 from .cross_encoder_similarity import CrossEncoderSimilarityMatrixCalculator
