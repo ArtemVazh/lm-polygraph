@@ -139,14 +139,17 @@ class GreedyProbsCalculator(StatCalculator):
 
             attentions = out.attentions
             sequences = out.sequences
-            embeddings_encoder, embeddings_decoder, token_embeddings_decoder = get_embeddings_from_output(
-                out, batch, model.model_type
+            embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
+                out, batch, model.model_type, level="sequence"
+            )
+            token_embeddings_encoder, token_embeddings_decoder = get_embeddings_from_output(
+                out, batch, model.model_type, level="token"
             )
             if token_embeddings_decoder is None:
                 token_embeddings_decoder = torch.empty((0,embeddings_decoder.shape[-1]), dtype=torch.float32)
             else:
-                token_embeddings_decoder = token_embeddings_decoder[0, 1:]
-
+                token_embeddings_decoder = token_embeddings_decoder[0]
+            
         cut_logits = []
         cut_sequences = []
         cut_texts = []

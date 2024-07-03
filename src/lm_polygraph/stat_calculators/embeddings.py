@@ -16,15 +16,16 @@ def get_embeddings_from_output(
     use_averaging: bool = True,
     all_layers: bool = False,
     aggregation_method: str = "mean",
+    level: str = "sequence",
+    hidden_layer: int = -1
 ):
     batch_embeddings = None
     batch_embeddings_decoder = None
-    token_embeddings_decoder = None
     batch_size = len(batch["input_ids"])
 
     if model_type == "CausalLM":
         if not all_layers:
-            hidden_layer = -1
+            
             input_tokens_hs = output.hidden_states[0][hidden_layer].cpu().detach()
             if len(output.hidden_states) > 1:
                 generated_tokens_hs = torch.cat(
@@ -39,17 +40,19 @@ def get_embeddings_from_output(
                     dim=1,
                 )
         if len(output.hidden_states) > 1:
-            batch_embeddings_decoder = (
-                torch.cat([input_tokens_hs, generated_tokens_hs], dim=1)
-                .mean(axis=1)
-                .cpu()
-                .detach()
-            )
-            token_embeddings_decoder = (
-                torch.cat([input_tokens_hs[:, -1:], generated_tokens_hs], dim=1)
-                .cpu()
-                .detach()
-            )
+            if level == "sequence":
+                batch_embeddings_decoder = (
+                    torch.cat([input_tokens_hs, generated_tokens_hs], dim=1)
+                    .mean(axis=1)
+                    .cpu()
+                    .detach()
+                )
+            elif level == "token":
+                batch_embeddings_decoder = (
+                    torch.cat([input_tokens_hs[:, -1:], generated_tokens_hs], dim=1)
+                    .cpu()
+                    .detach()
+                )
         else:
             batch_embeddings_decoder = input_tokens_hs.mean(axis=1).cpu().detach()
         batch_embeddings = None
@@ -152,7 +155,7 @@ def get_embeddings_from_output(
     else:
         raise NotImplementedError
 
-    return batch_embeddings, batch_embeddings_decoder, token_embeddings_decoder
+    return batch_embeddings, batch_embeddings_decoder
 
 
 def aggregate(x, aggregation_method, axis):
@@ -165,9 +168,9 @@ def aggregate(x, aggregation_method, axis):
 
 
 class EmbeddingsCalculator(StatCalculator):
-    def __init__(self):
+    def __init__(self, hidden_layer = -1):
         super().__init__(["train_embeddings", "background_train_embeddings"], [])
-        self.hidden_layer = -1
+        self.hidden_layer = hidden_layer
 
     def __call__(
         self,
@@ -199,13 +202,17 @@ class EmbeddingsCalculator(StatCalculator):
                     ]
                 ),
             )
-            embeddings_encoder, embeddings_decoder, token_embeddings_decoder = get_embeddings_from_output(
-                out, batch, model.model_type
+            embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
+                out, batch, model.model_type, level="sequence", hidden_layer=self.hidden_layer
             )
+            token_embeddings_encoder, token_embeddings_decoder = get_embeddings_from_output(
+                out, batch, model.model_type, level="token", hidden_layer=self.hidden_layer
+            )
+            
             if token_embeddings_decoder is None:
-                token_embeddings_decoder = torch.empty((0,embeddings_decoder.shape[-1]), dtype=torch.float32)
+                token_embeddings_decoder = torch.empty((0, embeddings_decoder.shape[-1]), dtype=torch.float32)
             else:
-                token_embeddings_decoder = token_embeddings_decoder[0, 1:]
+                token_embeddings_decoder = token_embeddings_decoder[0]
 
         if model.model_type == "CausalLM":
             return {
