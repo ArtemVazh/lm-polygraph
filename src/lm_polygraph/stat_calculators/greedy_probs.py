@@ -67,6 +67,7 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_greedy_log_likelihoods",
                 "embeddings",
                 "token_embeddings",
+                "background_token_embeddings",
                 "attention_features",
                 "attention_weights",
                 # "attention_max_features",
