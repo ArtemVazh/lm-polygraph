@@ -223,7 +223,7 @@ class EmbeddingsCalculator(StatCalculator):
     def __init__(self, hidden_layer = -1):
         self.hidden_layer = hidden_layer
         if self.hidden_layer == -1:
-            super().__init__(["train_embeddings", "background_train_embeddings", "train_token_embeddings", "background_token_train_embeddings"], ["embeddings_all"])
+            super().__init__(["train_embeddings", "background_train_embeddings", "train_token_embeddings", "background_train_token_embeddings"], ["embeddings_all"])
         else:
             super().__init__([f"embeddings_{self.hidden_layer}", f"train_embeddings_{self.hidden_layer}", f"background_train_embeddings_{self.hidden_layer}", f"background_token_embeddings_{self.hidden_layer}",
                               f"token_embeddings_{self.hidden_layer}", f"train_token_embeddings_{self.hidden_layer}", f"background_train_token_embeddings_{self.hidden_layer}"], ["embeddings_all"])
