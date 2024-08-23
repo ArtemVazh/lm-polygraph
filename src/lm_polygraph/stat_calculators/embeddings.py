@@ -17,44 +17,47 @@ def get_embeddings_from_output(
     all_layers: bool = False,
     aggregation_method: str = "mean",
     level: str = "sequence",
-    hidden_layer: int = -1
+    hidden_layer: int = -1,
+    return_source_hidden_states: bool = False,
 ):
     batch_embeddings = None
     batch_embeddings_decoder = None
     batch_size = len(batch["input_ids"])
 
     if model_type == "CausalLM":
-        if not all_layers:
-            
-            input_tokens_hs = output.hidden_states[0][hidden_layer].cpu().detach()
-            if len(output.hidden_states) > 1:
-                generated_tokens_hs = torch.cat(
-                    [h[hidden_layer].cpu().detach() for h in output.hidden_states[1:]],
-                    dim=1,
-                )
-        else:
-            input_tokens_hs = output.hidden_states[0].mean(axis=0).cpu().detach()
-            if len(output.hidden_states) > 1:
-                generated_tokens_hs = torch.cat(
-                    [h.mean(axis=0).cpu().detach() for h in output.hidden_states[1:]],
-                    dim=1,
-                )
-        if len(output.hidden_states) > 1:
-            if level == "sequence":
-                batch_embeddings_decoder = (
-                    torch.cat([input_tokens_hs, generated_tokens_hs], dim=1)
-                    .mean(axis=1)
-                    .cpu()
-                    .detach()
-                )
-            elif level == "token":
-                batch_embeddings_decoder = (
-                    torch.cat([input_tokens_hs[:, -1:], generated_tokens_hs], dim=1)
-                    .cpu()
-                    .detach()
-                )
-        else:
+        input_tokens_hs = output.hidden_states[0][hidden_layer].cpu().detach()
+        if return_source_hidden_states:
             batch_embeddings_decoder = input_tokens_hs.mean(axis=1).cpu().detach()
+        else:
+            if not all_layers:
+                if len(output.hidden_states) > 1:
+                    generated_tokens_hs = torch.cat(
+                        [h[hidden_layer].cpu().detach() for h in output.hidden_states[1:]],
+                        dim=1,
+                    )
+            else:
+                input_tokens_hs = output.hidden_states[0].mean(axis=0).cpu().detach()
+                if len(output.hidden_states) > 1:
+                    generated_tokens_hs = torch.cat(
+                        [h.mean(axis=0).cpu().detach() for h in output.hidden_states[1:]],
+                        dim=1,
+                    )
+            if len(output.hidden_states) > 1:
+                if level == "sequence":
+                    batch_embeddings_decoder = (
+                        torch.cat([input_tokens_hs, generated_tokens_hs], dim=1)
+                        .mean(axis=1)
+                        .cpu()
+                        .detach()
+                    )
+                elif level == "token":
+                    batch_embeddings_decoder = (
+                        torch.cat([input_tokens_hs[:, -1:], generated_tokens_hs], dim=1)
+                        .cpu()
+                        .detach()
+                    )
+            else:
+                batch_embeddings_decoder = input_tokens_hs.mean(axis=1).cpu().detach()
         batch_embeddings = None
     elif model_type == "Seq2SeqLM":
         if use_averaging:
@@ -274,3 +277,45 @@ class EmbeddingsCalculator(StatCalculator):
             }
         else:
             raise NotImplementedError
+        
+class SourceEmbeddingsCalculator(StatCalculator):
+    def __init__(self, hidden_layer = -1):
+        self.hidden_layer = hidden_layer
+        if self.hidden_layer == -1:
+            super().__init__(["train_source_embeddings"], ["embeddings_all"])
+        else:
+            super().__init__([f"train_source_embeddings_{self.hidden_layer}"], ["embeddings_all"])
+        
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+    ) -> Dict[str, np.ndarray]:
+        batch: Dict[str, torch.Tensor] = model.tokenize(texts)
+        batch = {k: v.to(model.device()) for k, v in batch.items()}
+        with torch.no_grad():
+            out = OutputWrapper()
+            if model.model_type == "CausalLM":
+                out.hidden_states = dependencies["embeddings_all_decoder"]
+            elif model.model_type == "Seq2SeqLM":
+                out.decoder_hidden_states = dependencies["embeddings_all_decoder"]
+                out.encoder_hidden_states = dependencies["embeddings_all_encoder"]
+            
+            embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
+                out, batch, model.model_type, level="sequence", hidden_layer=self.hidden_layer, return_source_hidden_states=True
+            )
+            
+        if model.model_type == "CausalLM":
+            if self.hidden_layer == -1:
+                return {
+                    "source_embeddings_decoder": embeddings_decoder.cpu().detach().numpy(),
+                }
+            else:
+                return {
+                    f"source_embeddings_decoder_{self.hidden_layer}": embeddings_decoder.cpu().detach().numpy(),
+                }
+        else:
+            raise NotImplementedError
+        

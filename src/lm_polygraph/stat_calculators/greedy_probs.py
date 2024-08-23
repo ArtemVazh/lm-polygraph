@@ -237,7 +237,7 @@ class GreedyProbsCalculator(StatCalculator):
         # attn_features_max_tokens.append(attention_max_features_token_s)
 
         attn_features = np.array(attn_features)
-        attention_all = np.array(attention_all)
+        # attention_all = np.array(attention_all)
     
         ll = []
         for i in range(len(texts)):

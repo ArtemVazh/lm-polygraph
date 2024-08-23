@@ -353,7 +353,6 @@ def get_generation_metrics(args):
                 normalize = getattr(args, "normalize", False),
             ),
             AlignScore(),
-            OpenAIFactCheck(cache_path=args.cache_path),
         ]
         if args.task == "nmt":
             ignore_regex = getattr(args, "source_ignore_regex", None)

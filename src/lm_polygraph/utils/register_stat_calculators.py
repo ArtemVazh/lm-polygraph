@@ -69,8 +69,10 @@ def register_stat_calculators(
     _register(ModelScoreCalculator())
     _register(AllEmbeddingsCalculator())
     _register(EmbeddingsCalculator())
+    _register(SourceEmbeddingsCalculator())
     for layer in range(model.model.config.num_hidden_layers - 1):
         _register(EmbeddingsCalculator(hidden_layer=layer))
+        _register(SourceEmbeddingsCalculator(hidden_layer=layer))
     _register(EnsembleTokenLevelDataCalculator())
     _register(SemanticMatrixCalculator(nli_model=nli_model))
     _register(CrossEncoderSimilarityMatrixCalculator(nli_model=nli_model))
