@@ -319,3 +319,65 @@ class SourceEmbeddingsCalculator(StatCalculator):
         else:
             raise NotImplementedError
         
+class InternalStatesCalculator(StatCalculator):
+    def __init__(self, topk = 10):
+        super().__init__(["final_output_ranks", "topk_layer_distance", "topk_prob",
+                          "train_final_output_ranks", "train_topk_layer_distance", "train_topk_prob"], ["embeddings_all"])
+        self.topk = topk
+        
+    def process_word_id_topk_rank_data(self, word_id_topk_rank, model_emb, device):
+        layer_distance = torch.zeros((1, word_id_topk_rank.shape[-1])).to(device)
+        for l in range(word_id_topk_rank.shape[0] - 1):
+            words0 = word_id_topk_rank[l, :]
+            words1 = word_id_topk_rank[l+1, :]
+            words0 = torch.tensor(words0).unsqueeze(0).to(device)
+            words1 = torch.tensor(words1).unsqueeze(0).to(device)
+            
+            emb0 = model_emb(words0)
+            emb1 = model_emb(words1)
+            
+            distances = torch.cosine_similarity(emb0, emb1, dim=2).to(device)
+            layer_distance = torch.cat((layer_distance, distances), dim=0)
+        return layer_distance
+            
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+    ) -> Dict[str, np.ndarray]:
+        batch: Dict[str, torch.Tensor] = model.tokenize(texts)
+        batch = {k: v.to(model.device()) for k, v in batch.items()}
+        with torch.no_grad():
+            out = OutputWrapper()
+            if model.model_type == "CausalLM":
+                out.hidden_states = dependencies["embeddings_all_decoder"]
+                first_tokens_hs = torch.cat([out.hidden_states[0][l][:, -1, :] for l in range(len(out.hidden_states[0]))])
+                layerwise_preds = model.model.lm_head(first_tokens_hs)
+            
+            elif model.model_type == "Seq2SeqLM":
+                out.decoder_hidden_states = dependencies["embeddings_all_decoder"]
+                out.encoder_hidden_states = dependencies["embeddings_all_encoder"]
+                first_tokens_hs = torch.cat([out.hidden_states[0][l][:, -1, :] for l in range(len(out.decoder_hidden_states[0]))])
+                layerwise_preds = model.model.lm_head(first_tokens_hs)
+                
+            logits = torch.softmax(layerwise_preds, dim=-1)
+            sorted, indices = torch.sort(logits)
+            location = indices[:, -self.topk:]
+            prob = sorted[:, -self.topk:]
+            predicted_token = indices[-1][-1].item()
+            layer_distance = self.process_word_id_topk_rank_data(location, model.model.model.embed_tokens, model.device()).cpu().detach().numpy()
+            ranks = []
+            if model.model_type == "CausalLM":
+                for l in range(len(out.hidden_states[0])):
+                    ranks.append(np.argwhere(indices[l].cpu().detach().numpy()[::-1] == predicted_token)[0, 0] + 1)
+            elif model.model_type == "Seq2SeqLM":
+                for l in range(len(out.decoder_hidden_states[0])):
+                    ranks.append(np.argwhere(indices[l].cpu().detach().numpy()[::-1] == predicted_token)[0, 0] + 1)
+                     
+        return {
+            "final_output_ranks": ranks,
+            "topk_layer_distance": layer_distance,
+            "topk_prob": prob.cpu().detach().numpy(),
+            }

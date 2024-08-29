@@ -70,6 +70,7 @@ def register_stat_calculators(
     _register(AllEmbeddingsCalculator())
     _register(EmbeddingsCalculator())
     _register(SourceEmbeddingsCalculator())
+    _register(InternalStatesCalculator())
     for layer in range(model.model.config.num_hidden_layers - 1):
         _register(EmbeddingsCalculator(hidden_layer=layer))
         _register(SourceEmbeddingsCalculator(hidden_layer=layer))
