@@ -66,14 +66,7 @@ def register_stat_calculators(
     _register(SamplingGenerationCalculator())
     _register(BlackboxSamplingGenerationCalculator())
     _register(BartScoreCalculator())
-    _register(ModelScoreCalculator())
-    _register(AllEmbeddingsCalculator())
-    _register(EmbeddingsCalculator())
-    _register(SourceEmbeddingsCalculator())
-    _register(InternalStatesCalculator())
-    for layer in range(model.model.config.num_hidden_layers - 1):
-        _register(EmbeddingsCalculator(hidden_layer=layer))
-        _register(SourceEmbeddingsCalculator(hidden_layer=layer))
+    _register(ModelScoreCalculator())    
     _register(EnsembleTokenLevelDataCalculator())
     _register(SemanticMatrixCalculator(nli_model=nli_model))
     _register(CrossEncoderSimilarityMatrixCalculator(nli_model=nli_model))
@@ -83,4 +76,25 @@ def register_stat_calculators(
     _register(TrainGreedyAlternativesFactPrefNLICalculator(nli_model=nli_model))
     _register(GreedyAlternativesFactPrefNLICalculator(nli_model=nli_model))
     _register(ClaimsExtractor(openai_chat=openai_chat))
+    
+    _register(AllEmbeddingsCalculator())
+    _register(SourceEmbeddingsCalculator())
+    _register(SamplingGenerationEmbeddingsCalculator())
+    
+    _register(EmbeddingsCalculator(stage="train"))
+    _register(InternalStatesCalculator(stage="train"))
+    _register(TokenInternalStatesCalculator(stage="train"))
+    
+    for layer in range(model.model.config.num_hidden_layers - 1):
+        _register(EmbeddingsCalculator(hidden_layer=layer, stage="train"))
+        _register(SourceEmbeddingsCalculator(hidden_layer=layer))
+        
+    _register(EmbeddingsCalculator(stage=""))
+    _register(InternalStatesCalculator(stage=""))
+    _register(TokenInternalStatesCalculator(stage=""))
+    
+    for layer in range(model.model.config.num_hidden_layers - 1):
+        _register(EmbeddingsCalculator(hidden_layer=layer, stage=""))
+        _register(SamplingGenerationEmbeddingsCalculator(hidden_layer=layer))
+        
     return stat_calculators, stat_dependencies

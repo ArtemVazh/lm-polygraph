@@ -66,8 +66,14 @@ class RDESeq(Estimator):
         embeddings_type: str = "decoder",
         parameters_path: str = None,
         normalize: bool = False,
+        hidden_layer: int = -1,
     ):
-        super().__init__(["embeddings", "train_embeddings"], "sequence")
+        self.hidden_layer = hidden_layer
+        if self.hidden_layer == -1:
+            self.hidden_layer_name = ""
+        else:
+            self.hidden_layer_name = f"_{self.hidden_layer}"
+        super().__init__([f"embeddings{self.hidden_layer_name}", f"train_embeddings{self.hidden_layer_name}"], "sequence")
         self.pca = None
         self.MCD = None
         self.parameters_path = parameters_path
@@ -78,7 +84,7 @@ class RDESeq(Estimator):
         self.is_fitted = False
 
         if self.parameters_path is not None:
-            self.full_path = f"{self.parameters_path}/rde_{self.embeddings_type}"
+            self.full_path = f"{self.parameters_path}/rde_{self.embeddings_type}{self.hidden_layer_name}"
             os.makedirs(self.full_path, exist_ok=True)
             if os.path.exists(f"{self.full_path}/covariance.npy"):
                 self.pca = self.load_pca()
@@ -88,11 +94,11 @@ class RDESeq(Estimator):
                 self.is_fitted = True
 
     def __str__(self):
-        return f"RDESeq_{self.embeddings_type}"
+        return f"RDESeq_{self.embeddings_type}{self.hidden_layer_name}"
 
     def __call__(self, stats: Dict[str, np.ndarray]) -> np.ndarray:
         # take embeddings
-        embeddings = stats[f"embeddings_{self.embeddings_type}"]
+        embeddings = stats[f"embeddings_{self.embeddings_type}{self.hidden_layer_name}"]
 
         # define PCA with rbf kernel and n_components equal 100
         if not self.is_fitted:
@@ -100,7 +106,7 @@ class RDESeq(Estimator):
                 n_components=100, kernel="rbf", random_state=42, gamma=None
             )
             X_pca_train = self.pca.fit_transform(
-                stats[f"train_embeddings_{self.embeddings_type}"]
+                stats[f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"]
             )
             if self.parameters_path is not None:
                 self.save_pca()

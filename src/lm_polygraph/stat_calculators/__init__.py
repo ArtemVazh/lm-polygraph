@@ -3,7 +3,7 @@ from .greedy_probs import GreedyProbsCalculator, BlackboxGreedyTextsCalculator
 from .greedy_lm_probs import GreedyLMProbsCalculator
 from .prompt import PromptCalculator
 from .entropy import EntropyCalculator
-from .sample import SamplingGenerationCalculator, BlackboxSamplingGenerationCalculator
+from .sample import SamplingGenerationCalculator, BlackboxSamplingGenerationCalculator, SamplingGenerationEmbeddingsCalculator
 from .greedy_alternatives_nli import (
     GreedyAlternativesNLICalculator,
     GreedyAlternativesFactPrefNLICalculator,
@@ -12,7 +12,7 @@ from .greedy_alternatives_nli import (
 )
 from .bart_score import BartScoreCalculator
 from .model_score import ModelScoreCalculator
-from .embeddings import EmbeddingsCalculator, AllEmbeddingsCalculator, SourceEmbeddingsCalculator, InternalStatesCalculator
+from .embeddings import EmbeddingsCalculator, AllEmbeddingsCalculator, SourceEmbeddingsCalculator, InternalStatesCalculator, TokenInternalStatesCalculator
 from .ensemble_token_data import EnsembleTokenLevelDataCalculator
 from .semantic_matrix import SemanticMatrixCalculator
 from .cross_encoder_similarity import CrossEncoderSimilarityMatrixCalculator

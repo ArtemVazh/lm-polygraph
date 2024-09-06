@@ -4,6 +4,7 @@ import numpy as np
 from typing import Dict, List
 
 from .stat_calculator import StatCalculator
+from .embeddings import get_embeddings_from_output
 from lm_polygraph.utils.model import WhiteboxModel, BlackboxModel
 
 
@@ -66,16 +67,25 @@ class BlackboxSamplingGenerationCalculator(StatCalculator):
 
 def _gen_samples(n_samples, model, batch, **kwargs):
     batch_size = len(batch["input_ids"])
-    logits, sequences = [[] for _ in range(batch_size)], [[] for _ in range(batch_size)]
+    logits, sequences, embeddings = [[] for _ in range(batch_size)], [[] for _ in range(batch_size)], []
     with torch.no_grad():
         for k in range(n_samples):
             out = model.generate(**batch, **kwargs)
             cur_logits = torch.stack(out.scores, dim=1)
+            if model.model_type == "CausalLM":
+                embeddings.append({
+                    "sample_embeddings_all_decoder": out.hidden_states,
+                })
+            elif model.model_type == "Seq2SeqLM":
+                embeddings.append({
+                    "sample_embeddings_all_encoder": out.encoder_hidden_states,
+                    "sample_embeddings_all_decoder": out.decoder_hidden_states,
+                })
             for i in range(batch_size):
                 sequences[i].append(out.sequences[i])
                 logits[i].append(cur_logits[i])
     sequences = [s for sample_seqs in sequences for s in sample_seqs]
-    return sequences, sum(logits, [])
+    return sequences, sum(logits, []), embeddings
 
 
 class SamplingGenerationCalculator(StatCalculator):
@@ -98,6 +108,7 @@ class SamplingGenerationCalculator(StatCalculator):
                 "sample_tokens",
                 "sample_texts",
                 "sample_log_likelihoods",
+                "sample_embeddings_all",
             ],
             [],
         )
@@ -127,12 +138,13 @@ class SamplingGenerationCalculator(StatCalculator):
         batch: Dict[str, torch.Tensor] = model.tokenize(texts)
         batch = {k: v.to(model.device()) for k, v in batch.items()}
         samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n)
-        sequences, logits = _gen_samples(
+        sequences, logits, embeddings = _gen_samples(
             samples_n,
             model,
             batch,
             output_scores=True,
             return_dict_in_generate=True,
+            output_hidden_states=True,
             max_new_tokens=max_new_tokens,
             min_new_tokens=2,
             do_sample=True,
@@ -180,4 +192,84 @@ class SamplingGenerationCalculator(StatCalculator):
             "sample_log_probs": log_probs,
             "sample_tokens": tokens,
             "sample_texts": texts,
+            "sample_embeddings_all": embeddings,
+        }
+        
+class OutputWrapper:
+    hidden_states = None
+    encoder_hidden_states = None
+    decoder_hidden_states = None
+        
+class SamplingGenerationEmbeddingsCalculator(StatCalculator):
+    """
+    For Whitebox model (lm_polygraph.WhiteboxModel), at input texts batch calculates:
+    * sampled texts
+    * tokens of the sampled texts
+    * probabilities of the sampled tokens generation
+    """
+
+    def __init__(self, samples_n: int = 10, hidden_layer: int = -1):
+        """
+        Parameters:
+            samples_n (int): number of samples to generate per input text. Default: 10
+        """
+        self.samples_n = samples_n
+        self.hidden_layer = hidden_layer
+        if self.hidden_layer == -1:
+            self.hidden_layer_name = ""
+        else:
+            self.hidden_layer_name = f"_{self.hidden_layer}"
+            
+        super().__init__([f"sample_embeddings{self.hidden_layer_name}", f"sample_embeddings_last_token{self.hidden_layer_name}"], ["sample_embeddings_all"])
+
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+    ) -> Dict[str, np.ndarray]:
+        """
+        Calculates the statistics of sampling texts.
+
+        Parameters:
+            dependencies (Dict[str, np.ndarray]): input statistics, can be empty (not used).
+            texts (List[str]): Input texts batch used for model generation.
+            model (Model): Model used for generation.
+            max_new_tokens (int): Maximum number of new tokens at model generation. Default: 100.
+        Returns:
+            Dict[str, np.ndarray]: dictionary with the following items:
+                - 'sample_texts' (List[List[str]]): `samples_n` texts for each input text in the batch,
+                - 'sample_tokens' (List[List[List[float]]]): tokenized 'sample_texts',
+                - 'sample_log_probs' (List[List[float]]): sum of the log probabilities at each token of the sampling generation.
+                - 'sample_log_likelihoods' (List[List[List[float]]]): log probabilities at each token of the sampling generation.
+        """
+        batch: Dict[str, torch.Tensor] = model.tokenize(texts)    
+        batch = {k: v.to(model.device()) for k, v in batch.items()}
+            
+        batch_size = len(batch["input_ids"])
+        embeddings = [[] for _ in range(batch_size)]
+        embeddings_last_token = [[] for _ in range(batch_size)]
+        
+        for sample_embeddings in dependencies["sample_embeddings_all"]:
+            out = OutputWrapper()
+            if model.model_type == "CausalLM":
+                out.hidden_states = sample_embeddings["sample_embeddings_all_decoder"]
+            elif model.model_type == "Seq2SeqLM":
+                out.decoder_hidden_states = sample_embeddings["sample_embeddings_all_decoder"]
+                out.encoder_hidden_states = sample_embeddings["sample_embeddings_all_encoder"]
+
+            _, cur_embeddings = get_embeddings_from_output(out, batch, model.model_type, level="sequence", hidden_layer=self.hidden_layer)
+            _, cur_token_embeddings = get_embeddings_from_output(out, batch, model.model_type, level="token", hidden_layer=self.hidden_layer)
+            
+            for i in range(batch_size):
+                embeddings[i].append(cur_embeddings[i].cpu().detach().numpy())
+                if len(cur_token_embeddings.shape) > 2:
+                    embeddings_last_token[i].append(cur_token_embeddings[i, -1].cpu().detach().numpy())
+                else:
+                    embeddings_last_token[i].append(cur_token_embeddings[i].cpu().detach().numpy())
+
+        return {
+            f"sample_embeddings{self.hidden_layer_name}": embeddings,
+            f"sample_embeddings_last_token{self.hidden_layer_name}": embeddings_last_token,
         }
