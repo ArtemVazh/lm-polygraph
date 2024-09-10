@@ -460,7 +460,8 @@ class InternalStatesCalculator(StatCalculator):
                 for layer in range(len(out.hidden_states[0])):
                     ranks.append(
                         np.argwhere(
-                            indices[layer].cpu().detach().numpy()[::-1] == predicted_token
+                            indices[layer].cpu().detach().numpy()[::-1]
+                            == predicted_token
                         )[0, 0]
                         + 1
                     )
@@ -468,7 +469,8 @@ class InternalStatesCalculator(StatCalculator):
                 for layer in range(len(out.decoder_hidden_states[0])):
                     ranks.append(
                         np.argwhere(
-                            indices[layer].cpu().detach().numpy()[::-1] == predicted_token
+                            indices[layer].cpu().detach().numpy()[::-1]
+                            == predicted_token
                         )[0, 0]
                         + 1
                     )
