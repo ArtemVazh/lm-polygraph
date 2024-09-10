@@ -435,7 +435,7 @@ class UEManager:
         background_train_stats = self._extract_train_embeddings(background=True)
 
         iterable_data = tqdm(self.data) if self.verbose else self.data
-        
+
         for batch_i, (inp_texts, target_texts) in enumerate(iterable_data):
             batch_stats: Dict[str, np.ndarray] = {}
             for key, val in [
@@ -484,7 +484,12 @@ class UEManager:
                 self.gen_metrics[generation_metric.level, str(generation_metric)] += m
                 batch_gen_metrics[generation_metric.level, str(generation_metric)] += m
 
-            for key in ["blackbox_greedy_texts", "greedy_texts", "greedy_tokens", "claim_texts_concatenated"]:#, "attention_all"]:
+            for key in [
+                "blackbox_greedy_texts",
+                "greedy_texts",
+                "greedy_tokens",
+                "claim_texts_concatenated",
+            ]:  # , "attention_all"]:
                 if key in batch_stats.keys():
                     self.stats[key] += batch_stats[key]
             for processor in self.processors:
@@ -562,7 +567,7 @@ class UEManager:
             calculators (list): list of stat calculators to run
             inp_texts (list): list of inputs to the model in the batch
         """
-        
+
         for stat_calculator in calculators:
             try:
                 start = time.time()
@@ -576,7 +581,7 @@ class UEManager:
                         continue
                     batch_stats[stat] = stat_value
                     self.time_stats[stat] += [end - start]
-                        
+
                     if (f"blackbox_{stat}" in self.stat_calculators_dict.keys()) and (
                         f"blackbox_{stat}" in self.stats_names
                     ):
@@ -619,7 +624,7 @@ class UEManager:
                 self.estimations[estimator.level, str(estimator)] += e
                 batch_estimations[estimator.level, str(estimator)] += e
                 self.time_stats[str(estimator)] += [end - start]
-                        
+
             except Exception as e:
                 if self.ignore_exceptions:
                     bad_estimators.append(estimator)
@@ -694,7 +699,9 @@ class UEManager:
                         result_train_stat[key_prefix + stat] = np.concatenate(
                             train_stats[stat]
                         )
-                    except:
+                    except Exception as e:
+                        print(e)
+                        print("Continue")
                         continue
 
         return result_train_stat

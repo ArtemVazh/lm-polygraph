@@ -73,7 +73,13 @@ class RDESeq(Estimator):
             self.hidden_layer_name = ""
         else:
             self.hidden_layer_name = f"_{self.hidden_layer}"
-        super().__init__([f"embeddings{self.hidden_layer_name}", f"train_embeddings{self.hidden_layer_name}"], "sequence")
+        super().__init__(
+            [
+                f"embeddings{self.hidden_layer_name}",
+                f"train_embeddings{self.hidden_layer_name}",
+            ],
+            "sequence",
+        )
         self.pca = None
         self.MCD = None
         self.parameters_path = parameters_path
@@ -106,7 +112,9 @@ class RDESeq(Estimator):
                 n_components=100, kernel="rbf", random_state=42, gamma=None
             )
             X_pca_train = self.pca.fit_transform(
-                stats[f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"]
+                stats[
+                    f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
+                ]
             )
             if self.parameters_path is not None:
                 self.save_pca()

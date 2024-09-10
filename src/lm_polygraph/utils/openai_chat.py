@@ -88,9 +88,9 @@ class OpenAIChat:
         for i in range(len(sleep_time_values)):
             try:
                 client = openai.OpenAI(
-                        # This is the default and can be omitted
-                        api_key=self.api_key,
-                        http_client=httpx.Client(proxies=self.http_proxy_url),
+                    # This is the default and can be omitted
+                    api_key=self.api_key,
+                    http_client=httpx.Client(proxies=self.http_proxy_url),
                 )
                 return client.chat.completions.create(
                     model=self.openai_model,
