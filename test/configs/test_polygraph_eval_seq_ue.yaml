@@ -4,6 +4,7 @@ hydra:
 
 defaults:
   - model: bloomz-560m
+  - _self_
 
 cache_path: ./workdir/output
 save_path: '${hydra:run.dir}'
@@ -29,7 +30,6 @@ generation_metrics:
 ens_type:
 
 additional_estimators: {}
-additional_estimators_kwargs: {}
 
 subsample_eval_dataset: 10
 batch_size: 2

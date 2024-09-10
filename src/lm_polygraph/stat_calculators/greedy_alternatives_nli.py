@@ -103,6 +103,7 @@ class GreedyAlternativesNLICalculator(StatCalculator):
 
         return {"greedy_tokens_alternatives_nli": greedy_alternatives_nli}
 
+
 class TrainGreedyAlternativesNLICalculator(StatCalculator):
     def __init__(self, nli_model):
         super().__init__(

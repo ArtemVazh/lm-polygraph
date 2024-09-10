@@ -7,14 +7,14 @@ import os
 import time
 
 from collections import defaultdict
-from typing import List, Set, Dict, Tuple, Optional
+from typing import List, Set, Dict, Tuple, Optional, Union
 from tqdm import tqdm
 from dataclasses import dataclass
 
 from lm_polygraph.utils.dataset import Dataset
 from lm_polygraph.utils.model import WhiteboxModel, BlackboxModel, Model
 from lm_polygraph.utils.processor import Processor
-from lm_polygraph.utils.normalize import normalize_ue, can_normalize_ue
+
 from lm_polygraph.generation_metrics.generation_metric import GenerationMetric
 from lm_polygraph.ue_metrics.ue_metric import (
     UEMetric,
@@ -109,10 +109,12 @@ class UncertaintyOutput:
         model_path (str): path to the model used in generation.
     """
 
-    uncertainty: float
+    uncertainty: Union[float, List[float]]
     input_text: str
     generation_text: str
+    generation_tokens: List[int]
     model_path: str
+    estimator: str
 
 
 def estimate_uncertainty(
@@ -168,13 +170,15 @@ def estimate_uncertainty(
     )
     man()
     ue = man.estimations[estimator.level, str(estimator)]
-    if can_normalize_ue(estimator, model.model_path):
-        if estimator.level == "sequence":
-            ue = normalize_ue(estimator, model.model_path, ue[0])
-        else:
-            ue = [normalize_ue(estimator, model.model_path, i) for i in ue]
     texts = man.stats.get("greedy_texts", man.stats.get("blackbox_greedy_texts", None))
-    return UncertaintyOutput(ue[0], input_text, texts[0], model.model_path)
+    tokens = man.stats.get("greedy_tokens", None)
+    if tokens is not None and len(tokens) > 0:
+        # Remove last token, which is the end of the sequence token
+        # since we don't include it's uncertainty in the estimator's output
+        tokens = tokens[0][:-1]
+    return UncertaintyOutput(
+        ue[0], input_text, texts[0], tokens, model.model_path, str(estimator)
+    )
 
 
 def _flatten_results(results, result_generator_class):
@@ -248,6 +252,7 @@ class UEManager:
         ensemble_model: Optional[WhiteboxModel] = None,
         deberta_batch_size: int = 1,
         deberta_device: Optional[str] = None,
+        language: str = "en",
         verbose: bool = True,
         max_new_tokens: int = 100,
         background_train_dataset_max_new_tokens: int = 100,
@@ -270,6 +275,7 @@ class UEManager:
             deberta_batch_size (int): Batch size for DeBERTa model used in some estimators. Default: 10.
             deberta_device (Optional[str]): The device to run deberta on. If None, will use 'cuda:0' if available,
                 'cpu' otherwise. Default: None.
+            language (str): Language to test in claim-level benchmark, one of 'en', 'zh', 'ar', 'ru'. Default: 'en'.
             verbose (bool): If set, will print useful info during batch processing. Default: True.
             max_new_tokens (int): Maximum new tokens to use in generation. Default: 100.
         """
@@ -277,6 +283,7 @@ class UEManager:
         stat_calculators_dict, stat_dependencies_dict = register_stat_calculators(
             deberta_batch_size=deberta_batch_size,
             deberta_device=deberta_device,
+            language=language,
             cache_path=cache_path,
             model=model,
         )
@@ -417,7 +424,7 @@ class UEManager:
         * Saving uncertainty estimations, ground-truth uncertainties and ue_metrics values for further usage.
 
         Returns:
-            Dict[Tuple[str, str, str, str], float]: dictionary with metrics results. Dictionary keys consist of
+            [Tuple[str, str, str, str], float]: dictionary with metrics results. Dictionary keys consist of
                 - uncertainty estimation level: 'sequence' or 'token',
                 - estimator name,
                 - generation metrics name,
@@ -428,7 +435,7 @@ class UEManager:
         background_train_stats = self._extract_train_embeddings(background=True)
 
         iterable_data = tqdm(self.data) if self.verbose else self.data
-        
+
         for batch_i, (inp_texts, target_texts) in enumerate(iterable_data):
             batch_stats: Dict[str, np.ndarray] = {}
             for key, val in [
@@ -442,6 +449,7 @@ class UEManager:
                 target_tokens = self._tokenize_target_texts(target_texts)
                 self.stats["target_tokens"] += target_tokens
                 batch_stats["target_tokens"] = target_tokens
+                batch_stats["model"] = self.model
 
             train_stats_keys = list(train_stats.keys())
             for stat in train_stats_keys:
@@ -471,12 +479,17 @@ class UEManager:
                 )
                 if not isinstance(m, list):
                     m = m.tolist()
-                if generation_metric.level != "sequence":
+                if generation_metric.level == "claim":
                     m = _flatten_results(m, generation_metric)
                 self.gen_metrics[generation_metric.level, str(generation_metric)] += m
                 batch_gen_metrics[generation_metric.level, str(generation_metric)] += m
 
-            for key in ["blackbox_greedy_texts", "greedy_texts", "greedy_tokens", "claim_texts_concatenated"]:#, "attention_all"]:
+            for key in [
+                "blackbox_greedy_texts",
+                "greedy_texts",
+                "greedy_tokens",
+                "claim_texts_concatenated",
+            ]:  # , "attention_all"]:
                 if key in batch_stats.keys():
                     self.stats[key] += batch_stats[key]
             for processor in self.processors:
@@ -554,7 +567,7 @@ class UEManager:
             calculators (list): list of stat calculators to run
             inp_texts (list): list of inputs to the model in the batch
         """
-        
+
         for stat_calculator in calculators:
             try:
                 start = time.time()
@@ -568,7 +581,7 @@ class UEManager:
                         continue
                     batch_stats[stat] = stat_value
                     self.time_stats[stat] += [end - start]
-                        
+
                     if (f"blackbox_{stat}" in self.stat_calculators_dict.keys()) and (
                         f"blackbox_{stat}" in self.stats_names
                     ):
@@ -606,13 +619,12 @@ class UEManager:
                 end = time.time()
                 if not isinstance(e, list):
                     e = e.tolist()
-                if estimator.level != "sequence":
+                if estimator.level == "claim":
                     e = _flatten_results(e, estimator)
-
                 self.estimations[estimator.level, str(estimator)] += e
                 batch_estimations[estimator.level, str(estimator)] += e
                 self.time_stats[str(estimator)] += [end - start]
-                        
+
             except Exception as e:
                 if self.ignore_exceptions:
                     bad_estimators.append(estimator)
@@ -687,7 +699,9 @@ class UEManager:
                         result_train_stat[key_prefix + stat] = np.concatenate(
                             train_stats[stat]
                         )
-                    except:
+                    except Exception as e:
+                        print(e)
+                        print("Continue")
                         continue
 
         return result_train_stat

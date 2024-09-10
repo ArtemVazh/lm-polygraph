@@ -70,7 +70,6 @@ class GreedyProbsCalculator(StatCalculator):
                 "embeddings_all",
                 "attention_features",
                 "attention_weights",
-                
                 "train_embeddings_all",
                 "train_attention_features",
                 "train_greedy_texts",
@@ -78,12 +77,10 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_target_texts",
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
-                
                 # "train_attention_max_features",
                 # "train_attention_max_features_values",
                 # "train_attention_max_features_token",
                 # "train_attention_all"
-                
                 # "attention_all",
                 # "attention_max_features",
                 # "attention_max_features_values",
@@ -148,14 +145,18 @@ class GreedyProbsCalculator(StatCalculator):
             embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
                 out, batch, model.model_type, level="sequence"
             )
-            token_embeddings_encoder, token_embeddings_decoder = get_embeddings_from_output(
-                out, batch, model.model_type, level="token"
+            token_embeddings_encoder, token_embeddings_decoder = (
+                get_embeddings_from_output(out, batch, model.model_type, level="token")
             )
             if token_embeddings_decoder is None:
-                token_embeddings_decoder = torch.empty((0,embeddings_decoder.shape[-1]), dtype=torch.float32)
+                token_embeddings_decoder = torch.empty(
+                    (0, embeddings_decoder.shape[-1]), dtype=torch.float32
+                )
             elif len(token_embeddings_decoder.shape) == 3:
-                token_embeddings_decoder = token_embeddings_decoder.reshape(-1, token_embeddings_decoder.shape[-1])
-            
+                token_embeddings_decoder = token_embeddings_decoder.reshape(
+                    -1, token_embeddings_decoder.shape[-1]
+                )
+
         cut_logits = []
         cut_sequences = []
         cut_texts = []
@@ -193,7 +194,7 @@ class GreedyProbsCalculator(StatCalculator):
         # attn_features_max = []
         # attn_features_max_tokens = []
         # attn_features_max_values = []
-        #attn = []
+        # attn = []
         for i in range(len(texts)):
             c = len(cut_sequences[i])
             attn_mask = np.zeros(
@@ -208,21 +209,21 @@ class GreedyProbsCalculator(StatCalculator):
                 attn_mask[:, j, :j] = (
                     torch.vstack(
                         [
-                            attentions[j][l][0][h][0][-j:]
-                            for l in range(len(attentions[j]))
-                            for h in range(len(attentions[j][l][0]))
+                            attentions[j][layer][0][head][0][-j:]
+                            for layer in range(len(attentions[j]))
+                            for head in range(len(attentions[j][layer][0]))
                         ]
                     )
                     .cpu()
                     .numpy()
                 )
-                
-            #attn.append(attn_mask.transpose(1,2,0))
+
+            # attn.append(attn_mask.transpose(1,2,0))
             # top_n = min(3, attn_mask.max(0).shape[1])
             # topk = torch.topk(torch.tensor(attn_mask.max(0)), k=top_n, dim=1)
             # attn_features_max_values_s = []
             # attention_max_features_token_s = []
-            
+
             attention_all.append(attn_mask.max(0))
             for j in range(1, c):
                 attn_features.append(attn_mask[:, j, j - 1])
@@ -239,9 +240,9 @@ class GreedyProbsCalculator(StatCalculator):
         # attn_features_max_values.append(attn_features_max_values_s)
         # attn_features_max_tokens.append(attention_max_features_token_s)
         # attention_all = np.array(attention_all)
-        
+
         attn_features = np.array(attn_features)
-    
+
         ll = []
         for i in range(len(texts)):
             log_probs = cut_logits[i]
@@ -260,7 +261,7 @@ class GreedyProbsCalculator(StatCalculator):
             }
         else:
             raise NotImplementedError
-        
+
         # if model.model_type == "CausalLM":
         #     embeddings_dict = {
         #         "embeddings_decoder": embeddings_decoder,
@@ -284,10 +285,10 @@ class GreedyProbsCalculator(StatCalculator):
             "greedy_log_likelihoods": ll,
             "attention_features": attn_features,
             "attention_weights": attention_all,
-            #"attention_max_features": attn_features_max,
-            #"attention_max_features_token": attn_features_max_tokens,
-            #"attention_max_features_values": attn_features_max_values,
-            #"attention_all": attn
+            # "attention_max_features": attn_features_max,
+            # "attention_max_features_token": attn_features_max_tokens,
+            # "attention_max_features_values": attn_features_max_values,
+            # "attention_all": attn
         }
         result_dict.update(embeddings_dict)
 

@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from datasets import load_dataset, Dataset as hf_dataset
 
-from typing import Iterable, Tuple, List
+from typing import Iterable, Tuple, List, Union, Optional
 
 
 class Dataset:
@@ -31,7 +31,10 @@ class Dataset:
                 returns list of input texts and list of corresponding output texts.
         """
         for i in range(0, len(self.x), self.batch_size):
-            yield self.x[i : i + self.batch_size], self.y[i : i + self.batch_size]
+            yield (
+                self.x[i : i + self.batch_size],
+                self.y[i : i + self.batch_size],
+            )
 
     def __len__(self) -> int:
         """
@@ -66,7 +69,10 @@ class Dataset:
                 test input and target texts list.
         """
         X_train, X_test, y_train, y_test = train_test_split(
-            np.array(self.x), np.array(self.y), test_size=test_size, random_state=seed
+            np.array(self.x),
+            np.array(self.y),
+            test_size=test_size,
+            random_state=seed,
         )
 
         if split == "train":
@@ -76,7 +82,12 @@ class Dataset:
             self.x = X_test.tolist()
             self.y = y_test.tolist()
 
-        return X_train.tolist(), X_test.tolist(), y_train.tolist(), y_test.tolist()
+        return (
+            X_train.tolist(),
+            X_test.tolist(),
+            y_train.tolist(),
+            y_test.tolist(),
+        )
 
     def subsample(self, size: int, seed: int):
         """
@@ -124,7 +135,7 @@ class Dataset:
 
     @staticmethod
     def load_hf_dataset(
-        path: str,
+        path: Union[str, List[str]],
         split: str,
         **kwargs,
     ):
@@ -143,7 +154,7 @@ class Dataset:
 
     @staticmethod
     def from_datasets(
-        dataset_path: str,
+        dataset_path: Union[str, List[str]],
         x_column: str,
         y_column: str,
         batch_size: int,
@@ -152,6 +163,8 @@ class Dataset:
         mmlu_max_subject_size: int = 100,
         n_shot: int = 0,
         few_shot_split: str = "train",
+        few_shot_prompt: Optional[str] = None,
+        instruct: bool = False,
         split: str = "test",
         size: int = None,
         **kwargs,
@@ -208,7 +221,7 @@ class Dataset:
         elif ("wiki" in dataset_name.lower()) and len(prompt):
             x, y = [], []
             for sample in dataset[x_column]:
-                x.append(prompt.format(context=sample["context".strip()]))
+                x.append(prompt.format(context=sample["context"].strip()))
                 y.append("")
         elif "person" in dataset_name.lower():
             x = dataset[x_column]
@@ -225,7 +238,7 @@ class Dataset:
                 # and a question qi, the task is to predict the answer ai
                 doc_text = ""
                 for q, a in zip(doc["questions"][:i], doc["answers"]["input_text"][:i]):
-                    doc_text += prompt.format(question=q, answer=a)
+                    doc_text += "\n\n" + prompt.format(question=q, answer=a)
                 return doc_text
 
             x, y = [], []
@@ -234,9 +247,24 @@ class Dataset:
                 for j, (question, answer) in enumerate(
                     zip(inst[x_column], inst[y_column]["input_text"])
                 ):
+                    if instruct:
+                        assert (
+                            few_shot_prompt is not None
+                        ), "separate few_shot_prompt must be provided for instruction mode."
+                        few_shot_section = doc_to_text(inst, few_shot_prompt, j)
+                        if few_shot_section != "":
+                            few_shot_section = (
+                                "\n\nHere are a few examples of questions and answers:"
+                                + few_shot_section
+                                + "\n\nNow answer the following question in the same format.\n\n"
+                            )
+                        else:
+                            few_shot_section = "\n\n"
+                    else:
+                        few_shot_section = doc_to_text(inst, prompt, j) + "\n\n"
                     formatted_prompt = (
                         formatted_description
-                        + doc_to_text(inst, prompt, j)
+                        + few_shot_section
                         + prompt.format(
                             question=question,
                             answer="",
@@ -258,23 +286,50 @@ class Dataset:
         elif ("mmlu" in dataset_name.lower()) and len(prompt):
             answers = ["A", "B", "C", "D"]
             subjects = np.array(dataset["subject"])
+            few_shot_subjects = np.array(few_shot_dataset["subject"])
             x, y = [], []
             for subject in np.unique(subjects):
                 formatted_description = description.format(
                     subject=subject.replace("_", " ")
                 )
                 if n_shot > 0:
-                    few_shot_ids = np.random.choice(
-                        len(few_shot_dataset), n_shot, replace=False
+                    few_shot_subject = few_shot_dataset.select(
+                        np.argwhere(few_shot_subjects == subject).flatten()
                     )
-                    few_shot_data = few_shot_dataset.select(few_shot_ids)
-                    formatted_few_shot_prompt = ""
-                    for inst in few_shot_data:
-                        formatted_few_shot_prompt += prompt.format(
-                            choices=inst["choices"],
-                            question=inst["question"].strip(),
-                            answer=answers[inst["answer"]],
+                    few_shot_ids = np.random.choice(
+                        len(few_shot_subject), n_shot, replace=False
+                    )
+                    few_shot_data = few_shot_subject.select(few_shot_ids)
+                    if instruct:
+                        assert (
+                            few_shot_prompt is not None
+                        ), "separate few_shot_prompt must be provided for instruction mode."
+                        formatted_few_shot_prompt = (
+                            "Here are a few examples of questions and answers:\n\n"
                         )
+                        for inst in few_shot_data:
+                            formatted_few_shot_prompt += (
+                                few_shot_prompt.format(
+                                    choices=inst["choices"],
+                                    question=inst["question"].strip(),
+                                    answer=answers[inst["answer"]],
+                                )
+                                + "\n\n"
+                            )
+                        formatted_few_shot_prompt += (
+                            "Now answer the following question in the same format:\n\n"
+                        )
+                    else:
+                        formatted_few_shot_prompt = ""
+                        for inst in few_shot_data:
+                            formatted_few_shot_prompt += (
+                                prompt.format(
+                                    choices=inst["choices"],
+                                    question=inst["question"].strip(),
+                                    answer=answers[inst["answer"]],
+                                )
+                                + "\n"
+                            )
 
                 subject_data = dataset.select(
                     np.argwhere(subjects == subject).flatten()
@@ -291,6 +346,7 @@ class Dataset:
                     )
                     x.append(
                         formatted_description
+                        + "\n\n"
                         + formatted_few_shot_prompt
                         + formatted_prompt
                     )
@@ -302,28 +358,55 @@ class Dataset:
                 y.append(inst[y_column])
         elif ("trivia_qa" in dataset_name.lower()) and len(prompt):
             x, y = [], []
+
+            formatted_few_shot_prompt = description
             if n_shot > 0:
                 few_shot_ids = np.random.choice(
                     len(few_shot_dataset), n_shot, replace=False
                 )
                 few_shot_data = few_shot_dataset.select(few_shot_ids)
-                formatted_few_shot_prompt = ""
-                for inst in few_shot_data:
+                if instruct:
+                    assert (
+                        few_shot_prompt is not None
+                    ), "separate few_shot_prompt must be provided for instruction mode."
                     formatted_few_shot_prompt += (
-                        prompt.format(
-                            question=inst["question"].strip(),
-                            answer=inst["answer"]["normalized_value"],
+                        "\n\nHere are a few examples of questions and answers:\n\n"
+                    )
+                    for inst in few_shot_data:
+                        formatted_few_shot_prompt += (
+                            few_shot_prompt.format(
+                                question=inst["question"].strip(),
+                                answer=inst["answer"]["normalized_value"],
+                            )
+                            + "\n\n"
                         )
-                        + "\n"
+                    formatted_few_shot_prompt += (
+                        "Now answer the following question in the same format:\n\n"
                     )
+                else:
+                    formatted_few_shot_prompt = ""
+                    for inst in few_shot_data:
+                        formatted_few_shot_prompt += (
+                            prompt.format(
+                                question=inst["question"].strip(),
+                                answer=inst["answer"]["normalized_value"],
+                            )
+                            + "\n\n"
+                        )
+            else:
+                formatted_few_shot_prompt += "\n"
+
             for inst in dataset:
-                x.append(
-                    formatted_few_shot_prompt
-                    + prompt.format(
-                        question=inst["question"],
-                        answer="",
+                if instruct:
+                    x.append(
+                        formatted_few_shot_prompt
+                        + prompt.format(question=inst["question"])
                     )
-                )
+                else:
+                    x.append(
+                        formatted_few_shot_prompt
+                        + prompt.format(question=inst["question"], answer="")
+                    )
                 y.append([alias for alias in inst["answer"]["aliases"]])
         elif "allenai/c4" in dataset_name.lower():
             x, y = [], []
@@ -338,14 +421,16 @@ class Dataset:
         return Dataset(x, y, batch_size)
 
     @staticmethod
-    def load(csv_path, *args, **kwargs):
+    def load(path_or_path_and_files: Union[str, List[str]], *args, **kwargs):
         """
         Creates the dataset from either local .csv path (if such exists) or Huggingface datasets.
         See `from_csv` and `from_datasets` static functions for the description of *args and **kwargs arguments.
 
         Parameters:
-            csv_path (str): local path to .csv table or HF path to dataset.
+            path_or_path_and_files (str or List[str]): local path to .csv table or HF path to dataset.
         """
-        if isinstance(csv_path, str) and os.path.isfile(csv_path):
-            return Dataset.from_csv(csv_path, *args, **kwargs)
-        return Dataset.from_datasets(csv_path, *args, **kwargs)
+        if isinstance(path_or_path_and_files, str) and os.path.isfile(
+            path_or_path_and_files
+        ):
+            return Dataset.from_csv(path_or_path_and_files, *args, **kwargs)
+        return Dataset.from_datasets(path_or_path_and_files, *args, **kwargs)

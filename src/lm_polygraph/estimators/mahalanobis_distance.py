@@ -105,8 +105,14 @@ class MahalanobisDistanceSeq(Estimator):
             self.hidden_layer_name = ""
         else:
             self.hidden_layer_name = f"_{self.hidden_layer}"
-            
-        super().__init__([f"embeddings{self.hidden_layer_name}", f"train_embeddings{self.hidden_layer_name}"], "sequence")
+
+        super().__init__(
+            [
+                f"embeddings{self.hidden_layer_name}",
+                f"train_embeddings{self.hidden_layer_name}",
+            ],
+            "sequence",
+        )
         self.centroid = None
         self.sigma_inv = None
         self.parameters_path = parameters_path
@@ -115,14 +121,18 @@ class MahalanobisDistanceSeq(Estimator):
         self.min = 1e100
         self.max = -1e100
         self.is_fitted = False
-    
+
         if self.parameters_path is not None:
             self.full_path = f"{self.parameters_path}/md_{self.embeddings_type}{self.hidden_layer_name}"
             os.makedirs(self.full_path, exist_ok=True)
 
             if os.path.exists(f"{self.full_path}/centroid.pt"):
-                self.centroid = torch.load(f"{self.full_path}/centroid.pt", weights_only=False)
-                self.sigma_inv = torch.load(f"{self.full_path}/sigma_inv.pt", weights_only=False)
+                self.centroid = torch.load(
+                    f"{self.full_path}/centroid.pt", weights_only=False
+                )
+                self.sigma_inv = torch.load(
+                    f"{self.full_path}/sigma_inv.pt", weights_only=False
+                )
                 self.max = torch.load(f"{self.full_path}/max.pt", weights_only=False)
                 self.min = torch.load(f"{self.full_path}/min.pt", weights_only=False)
                 self.is_fitted = True
@@ -139,7 +149,9 @@ class MahalanobisDistanceSeq(Estimator):
         # compute centroids if not given
         if not self.is_fitted:
             train_embeddings = create_cuda_tensor_from_numpy(
-                stats[f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"]
+                stats[
+                    f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
+                ]
             )
             self.centroid = train_embeddings.mean(axis=0)
             if self.parameters_path is not None:
@@ -148,7 +160,9 @@ class MahalanobisDistanceSeq(Estimator):
         # compute inverse covariance matrix if not given
         if not self.is_fitted:
             train_embeddings = create_cuda_tensor_from_numpy(
-                stats[f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"]
+                stats[
+                    f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
+                ]
             )
             self.sigma_inv, _ = compute_inv_covariance(
                 self.centroid.unsqueeze(0), train_embeddings
