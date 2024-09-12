@@ -68,8 +68,8 @@ class RelativeMahalanobisDistanceSeq(Estimator):
             parameters_path,
             normalize=False,
             hidden_layer=self.hidden_layer,
-            device=device, 
-            storage_device=storage_device
+            device=device,
+            storage_device=storage_device,
         )
         self.is_fitted = False
 
@@ -90,7 +90,9 @@ class RelativeMahalanobisDistanceSeq(Estimator):
     def __str__(self):
         return f"RelativeMahalanobisDistanceSeq_{self.embeddings_type}{self.hidden_layer_name}"
 
-    def __call__(self, stats: Dict[str, np.ndarray], save_data: bool = True) -> np.ndarray:
+    def __call__(
+        self, stats: Dict[str, np.ndarray], save_data: bool = True
+    ) -> np.ndarray:
         # take the embeddings
         embeddings = create_cuda_tensor_from_numpy(
             stats[f"embeddings_{self.embeddings_type}{self.hidden_layer_name}"]
@@ -102,7 +104,9 @@ class RelativeMahalanobisDistanceSeq(Estimator):
 
         if not self.is_fitted:
             centroid_key = f"rmd_centroid{self.hidden_layer_name}"
-            if (centroid_key in stats.keys()): # to reduce number of stored centroid for multiple methods used the same data
+            if (
+                centroid_key in stats.keys()
+            ):  # to reduce number of stored centroid for multiple methods used the same data
                 self.centroid_0 = stats[centroid_key]
             else:
                 background_train_embeddings = create_cuda_tensor_from_numpy(
@@ -120,7 +124,9 @@ class RelativeMahalanobisDistanceSeq(Estimator):
 
         if not self.is_fitted:
             covariance_key = f"rmd_covariance{self.hidden_layer_name}"
-            if (covariance_key in stats.keys()): # to reduce number of stored centroid for multiple methods used the same data
+            if (
+                covariance_key in stats.keys()
+            ):  # to reduce number of stored centroid for multiple methods used the same data
                 self.sigma_inv_0 = stats[covariance_key]
             else:
                 background_train_embeddings = create_cuda_tensor_from_numpy(
@@ -143,7 +149,7 @@ class RelativeMahalanobisDistanceSeq(Estimator):
 
         if self.device == "cuda" and self.storage_device == "cpu":
             if embeddings.shape[0] < 20:
-                # force compute on cpu, since for a small number of embeddings it will be faster than move to cuda 
+                # force compute on cpu, since for a small number of embeddings it will be faster than move to cuda
                 dists_0 = (
                     mahalanobis_distance_with_known_centroids_sigma_inv(
                         self.centroid_0.float(),
@@ -169,16 +175,16 @@ class RelativeMahalanobisDistanceSeq(Estimator):
                 )
         elif self.device == "cuda" and self.storage_device == "cuda":
             dists_0 = (
-                    mahalanobis_distance_with_known_centroids_sigma_inv(
-                        self.centroid_0.float(),
-                        None,
-                        self.sigma_inv_0.float(),
-                        embeddings.float(),
-                    )[:, 0]
-                    .cpu()
-                    .detach()
-                    .numpy()
-                )
+                mahalanobis_distance_with_known_centroids_sigma_inv(
+                    self.centroid_0.float(),
+                    None,
+                    self.sigma_inv_0.float(),
+                    embeddings.float(),
+                )[:, 0]
+                .cpu()
+                .detach()
+                .numpy()
+            )
         else:
             raise NotImplementedError
 

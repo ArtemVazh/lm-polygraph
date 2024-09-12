@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import copy
 
 from typing import Dict
 
@@ -68,17 +67,33 @@ class PPLMDSeq(Estimator):
         self.PPL = Perplexity()
         if self.md_type == "MD":
             self.MD = MahalanobisDistanceSeq(
-                embeddings_type, parameters_path, normalize=False, device=device, storage_device=storage_device
+                embeddings_type,
+                parameters_path,
+                normalize=False,
+                device=device,
+                storage_device=storage_device,
             )
             self.MD_val = MahalanobisDistanceSeq(
-                embeddings_type, parameters_path, normalize=False, device=device, storage_device=storage_device
+                embeddings_type,
+                parameters_path,
+                normalize=False,
+                device=device,
+                storage_device=storage_device,
             )
         elif self.md_type == "RMD":
             self.MD = RelativeMahalanobisDistanceSeq(
-                embeddings_type, parameters_path, normalize=False, device=device, storage_device=storage_device
+                embeddings_type,
+                parameters_path,
+                normalize=False,
+                device=device,
+                storage_device=storage_device,
             )
             self.MD_val = RelativeMahalanobisDistanceSeq(
-                embeddings_type, parameters_path, normalize=False, device=device, storage_device=storage_device
+                embeddings_type,
+                parameters_path,
+                normalize=False,
+                device=device,
+                storage_device=storage_device,
             )
         else:
             raise NotImplementedError
@@ -103,9 +118,7 @@ class PPLMDSeq(Estimator):
 
         if not self.is_fitted:
             copy_stats = {}
-            copy_stats["greedy_log_likelihoods"] = stats[
-                "train_greedy_log_likelihoods"
-            ]
+            copy_stats["greedy_log_likelihoods"] = stats["train_greedy_log_likelihoods"]
             self.train_ppl = self.PPL(copy_stats)
             if self.parameters_path is not None:
                 save_array(self.train_ppl, f"{self.full_path}/train_ppl.npy")
@@ -117,7 +130,9 @@ class PPLMDSeq(Estimator):
             )
             copy_stats = {}
             if f"background_train_embeddings_{self.embeddings_type}" in stats.keys():
-                copy_stats[f"background_train_embeddings_{self.embeddings_type}"] = stats[f"background_train_embeddings_{self.embeddings_type}"]
+                copy_stats[f"background_train_embeddings_{self.embeddings_type}"] = (
+                    stats[f"background_train_embeddings_{self.embeddings_type}"]
+                )
             copy_stats[f"train_embeddings_{self.embeddings_type}"] = train_embeds
             copy_stats[f"embeddings_{self.embeddings_type}"] = val_embeds
             self.train_md = self.MD_val(copy_stats)
