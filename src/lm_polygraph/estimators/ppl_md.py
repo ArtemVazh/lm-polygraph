@@ -38,6 +38,8 @@ class PPLMDSeq(Estimator):
         md_type: str = "MD",
         parameters_path: str = None,
         normalize: bool = False,
+        device: str = "cuda",
+        storage_device: str = "cuda",
     ):
         super().__init__(
             [
@@ -49,6 +51,8 @@ class PPLMDSeq(Estimator):
             ],
             "sequence",
         )
+        self.device = device
+        self.storage_device = storage_device
         self.parameters_path = parameters_path
         self.embeddings_type = embeddings_type
         self.normalize = normalize
@@ -64,17 +68,17 @@ class PPLMDSeq(Estimator):
         self.PPL = Perplexity()
         if self.md_type == "MD":
             self.MD = MahalanobisDistanceSeq(
-                embeddings_type, parameters_path, normalize=False
+                embeddings_type, parameters_path, normalize=False, device=device, storage_device=storage_device
             )
             self.MD_val = MahalanobisDistanceSeq(
-                embeddings_type, parameters_path, normalize=False
+                embeddings_type, parameters_path, normalize=False, device=device, storage_device=storage_device
             )
         elif self.md_type == "RMD":
             self.MD = RelativeMahalanobisDistanceSeq(
-                embeddings_type, parameters_path, normalize=False
+                embeddings_type, parameters_path, normalize=False, device=device, storage_device=storage_device
             )
             self.MD_val = RelativeMahalanobisDistanceSeq(
-                embeddings_type, parameters_path, normalize=False
+                embeddings_type, parameters_path, normalize=False, device=device, storage_device=storage_device
             )
         else:
             raise NotImplementedError
@@ -112,6 +116,8 @@ class PPLMDSeq(Estimator):
                 random_state=42,
             )
             copy_stats = {}
+            if f"background_train_embeddings_{self.embeddings_type}" in stats.keys():
+                copy_stats[f"background_train_embeddings_{self.embeddings_type}"] = stats[f"background_train_embeddings_{self.embeddings_type}"]
             copy_stats[f"train_embeddings_{self.embeddings_type}"] = train_embeds
             copy_stats[f"embeddings_{self.embeddings_type}"] = val_embeds
             self.train_md = self.MD_val(copy_stats)

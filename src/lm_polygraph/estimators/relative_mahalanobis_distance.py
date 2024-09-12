@@ -37,6 +37,8 @@ class RelativeMahalanobisDistanceSeq(Estimator):
         parameters_path: str = None,
         normalize: bool = False,
         hidden_layer: int = -1,
+        device: str = "cuda",
+        storage_device: str = "cuda",
     ):
         self.hidden_layer = hidden_layer
         if self.hidden_layer == -1:
@@ -58,12 +60,16 @@ class RelativeMahalanobisDistanceSeq(Estimator):
         self.normalize = normalize
         self.min = 1e100
         self.max = -1e100
+        self.device = device
+        self.storage_device = storage_device
 
         self.MD = MahalanobisDistanceSeq(
             embeddings_type,
             parameters_path,
             normalize=False,
             hidden_layer=self.hidden_layer,
+            device=device, 
+            storage_device=storage_device
         )
         self.is_fitted = False
 
@@ -73,10 +79,10 @@ class RelativeMahalanobisDistanceSeq(Estimator):
             if os.path.exists(f"{self.full_path}/centroid_0.pt"):
                 self.centroid_0 = torch.load(
                     f"{self.full_path}/centroid_0.pt", weights_only=False
-                )
+                ).to(self.storage_device)
                 self.sigma_inv_0 = torch.load(
                     f"{self.full_path}/sigma_inv_0.pt", weights_only=False
-                )
+                ).to(self.storage_device)
                 self.max = load_array(f"{self.full_path}/max_0.npy")
                 self.min = load_array(f"{self.full_path}/min_0.npy")
                 self.is_fitted = True
@@ -84,7 +90,7 @@ class RelativeMahalanobisDistanceSeq(Estimator):
     def __str__(self):
         return f"RelativeMahalanobisDistanceSeq_{self.embeddings_type}{self.hidden_layer_name}"
 
-    def __call__(self, stats: Dict[str, np.ndarray]) -> np.ndarray:
+    def __call__(self, stats: Dict[str, np.ndarray], save_data: bool = True) -> np.ndarray:
         # take the embeddings
         embeddings = create_cuda_tensor_from_numpy(
             stats[f"embeddings_{self.embeddings_type}{self.hidden_layer_name}"]
@@ -95,47 +101,86 @@ class RelativeMahalanobisDistanceSeq(Estimator):
         # to obtain MD_0
 
         if not self.is_fitted:
-            background_train_embeddings = create_cuda_tensor_from_numpy(
-                stats[
-                    f"background_train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
-                ]
-            )
-            self.centroid_0 = background_train_embeddings.mean(axis=0)
-            if self.parameters_path is not None:
-                torch.save(self.centroid_0, f"{self.full_path}/centroid_0.pt")
+            centroid_key = f"rmd_centroid{self.hidden_layer_name}"
+            if (centroid_key in stats.keys()): # to reduce number of stored centroid for multiple methods used the same data
+                self.centroid_0 = stats[centroid_key]
+            else:
+                background_train_embeddings = create_cuda_tensor_from_numpy(
+                    stats[
+                        f"background_train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
+                    ]
+                )
+                self.centroid_0 = background_train_embeddings.mean(axis=0)
+                if self.storage_device == "cpu":
+                    self.centroid_0 = self.centroid_0.cpu()
+                if self.parameters_path is not None:
+                    torch.save(self.centroid_0, f"{self.full_path}/centroid_0.pt")
+                if save_data:
+                    stats[centroid_key] = self.centroid_0
 
         if not self.is_fitted:
-            background_train_embeddings = create_cuda_tensor_from_numpy(
-                stats[
-                    f"background_train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
-                ]
-            )
-            self.sigma_inv_0, _ = compute_inv_covariance(
-                self.centroid_0.unsqueeze(0), background_train_embeddings
-            )
-            if self.parameters_path is not None:
-                torch.save(self.sigma_inv_0, f"{self.full_path}/sigma_inv_0.pt")
+            covariance_key = f"rmd_covariance{self.hidden_layer_name}"
+            if (covariance_key in stats.keys()): # to reduce number of stored centroid for multiple methods used the same data
+                self.sigma_inv_0 = stats[covariance_key]
+            else:
+                background_train_embeddings = create_cuda_tensor_from_numpy(
+                    stats[
+                        f"background_train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
+                    ]
+                )
+                self.sigma_inv_0, _ = compute_inv_covariance(
+                    self.centroid_0.unsqueeze(0), background_train_embeddings
+                )
+                if self.storage_device == "cpu":
+                    self.sigma_inv_0 = self.sigma_inv_0.cpu()
+                if self.parameters_path is not None:
+                    torch.save(self.sigma_inv_0, f"{self.full_path}/sigma_inv_0.pt")
+                if save_data:
+                    stats[covariance_key] = self.sigma_inv_0
             self.is_fitted = True
-
-        if torch.cuda.is_available():
-            if not self.centroid_0.is_cuda:
-                self.centroid_0 = self.centroid_0.cuda()
-            if not self.sigma_inv_0.is_cuda:
-                self.sigma_inv_0 = self.sigma_inv_0.cuda()
 
         # compute MD_0
 
-        dists_0 = (
-            mahalanobis_distance_with_known_centroids_sigma_inv(
-                self.centroid_0,
-                None,
-                self.sigma_inv_0,
-                embeddings,
-            )[:, 0]
-            .cpu()
-            .detach()
-            .numpy()
-        )
+        if self.device == "cuda" and self.storage_device == "cpu":
+            if embeddings.shape[0] < 20:
+                # force compute on cpu, since for a small number of embeddings it will be faster than move to cuda 
+                dists_0 = (
+                    mahalanobis_distance_with_known_centroids_sigma_inv(
+                        self.centroid_0.float(),
+                        None,
+                        self.sigma_inv_0.float(),
+                        embeddings.cpu().float(),
+                    )[:, 0]
+                    .cpu()
+                    .detach()
+                    .numpy()
+                )
+            else:
+                dists_0 = (
+                    mahalanobis_distance_with_known_centroids_sigma_inv(
+                        self.centroid_0.cuda().float(),
+                        None,
+                        self.sigma_inv_0.cuda().float(),
+                        embeddings.float(),
+                    )[:, 0]
+                    .cpu()
+                    .detach()
+                    .numpy()
+                )
+        elif self.device == "cuda" and self.storage_device == "cuda":
+            dists_0 = (
+                    mahalanobis_distance_with_known_centroids_sigma_inv(
+                        self.centroid_0.float(),
+                        None,
+                        self.sigma_inv_0.float(),
+                        embeddings.float(),
+                    )[:, 0]
+                    .cpu()
+                    .detach()
+                    .numpy()
+                )
+        else:
+            raise NotImplementedError
 
         # compute original MD
 
