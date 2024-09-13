@@ -535,7 +535,12 @@ class WhiteboxModel(Model):
                 formatted_texts.append(formatted_chat)
             texts = formatted_texts
 
-        return self.tokenizer(texts, padding=True, return_tensors="pt")
+        batch = self.tokenizer(texts, padding=True, return_tensors="pt")
+        if batch["input_ids"].shape[-1] > 2048:
+            print("Length input_ids: ", batch["input_ids"].shape[-1])
+            return self.tokenizer(texts, padding=True, return_tensors="pt", max_length=2048, truncation=True)
+        
+        return batch
 
 
 def create_ensemble(

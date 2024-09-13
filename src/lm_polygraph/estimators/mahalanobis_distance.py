@@ -84,10 +84,10 @@ def mahalanobis_distance_with_known_centroids_sigma_inv(
     return dists  # np.min(dists, axis=1)
 
 
-def create_cuda_tensor_from_numpy(array):
+def create_cuda_tensor_from_numpy(array, device="cuda"):
     if not isinstance(array, torch.Tensor):
         array = torch.from_numpy(array)
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and (device == "cuda"):
         array = array.cuda()
     return array
 
