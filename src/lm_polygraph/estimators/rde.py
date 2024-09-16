@@ -109,13 +109,18 @@ class RDESeq(Estimator):
         # define PCA with rbf kernel and n_components equal 100
         if not self.is_fitted:
             self.pca = KernelPCA(
-                n_components=100, kernel="rbf", random_state=42, gamma=None
+                n_components=50, kernel="rbf", random_state=42, gamma=None
             )
-            X_pca_train = self.pca.fit_transform(
-                stats[
-                    f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
-                ]
-            )
+            embeddings = stats[
+                f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
+            ]
+            n_samples = embeddings.shape[0]
+            if n_samples > 1000:
+                indices = random.choice(np.arange(n_samples), size=1000, replace=False)
+                self.pca.fit(embeddings[indices])
+                X_pca_train = self.pca.transform(embeddings)
+            else:
+                X_pca_train = self.pca.fit_transform(embeddings)
             if self.parameters_path is not None:
                 self.save_pca()
 

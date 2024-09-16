@@ -218,23 +218,26 @@ class SamplingGenerationEmbeddingsCalculator(StatCalculator):
     * probabilities of the sampled tokens generation
     """
 
-    def __init__(self, samples_n: int = 10, hidden_layer: int = -1):
+    def __init__(self, samples_n: int = 10, hidden_layers: List[int] = [-1]):
         """
         Parameters:
             samples_n (int): number of samples to generate per input text. Default: 10
         """
         self.samples_n = samples_n
-        self.hidden_layer = hidden_layer
-        if self.hidden_layer == -1:
-            self.hidden_layer_name = ""
-        else:
-            self.hidden_layer_name = f"_{self.hidden_layer}"
+        self.hidden_layers = hidden_layers
 
+        stats = []
+        for layer in self.hidden_layers:
+            if layer == -1:
+                layer_name = ""
+            else:
+                layer_name = f"_{layer}"
+            stats += [
+                f"sample_embeddings{layer_name}",
+                f"sample_embeddings_last_token{layer_name}",
+            ]
         super().__init__(
-            [
-                f"sample_embeddings{self.hidden_layer_name}",
-                f"sample_embeddings_last_token{self.hidden_layer_name}",
-            ],
+            stats,
             ["sample_embeddings_all"],
         )
 
@@ -261,51 +264,59 @@ class SamplingGenerationEmbeddingsCalculator(StatCalculator):
                 - 'sample_log_likelihoods' (List[List[List[float]]]): log probabilities at each token of the sampling generation.
         """
         batch: Dict[str, torch.Tensor] = model.tokenize(texts)
-        batch = {k: v.to(model.device()) for k, v in batch.items()}
 
         batch_size = len(batch["input_ids"])
-        embeddings = [[] for _ in range(batch_size)]
-        embeddings_last_token = [[] for _ in range(batch_size)]
+        results = {}
 
-        for sample_embeddings in dependencies["sample_embeddings_all"]:
-            out = OutputWrapper()
-            if model.model_type == "CausalLM":
-                out.hidden_states = sample_embeddings["sample_embeddings_all_decoder"]
-            elif model.model_type == "Seq2SeqLM":
-                out.decoder_hidden_states = sample_embeddings[
-                    "sample_embeddings_all_decoder"
-                ]
-                out.encoder_hidden_states = sample_embeddings[
-                    "sample_embeddings_all_encoder"
-                ]
+        for layer in self.hidden_layers:
+            if layer == -1:
+                layer_name = ""
+            else:
+                layer_name = f"_{layer}"
 
-            _, cur_embeddings = get_embeddings_from_output(
-                out,
-                batch,
-                model.model_type,
-                level="sequence",
-                hidden_layer=self.hidden_layer,
-            )
-            _, cur_token_embeddings = get_embeddings_from_output(
-                out,
-                batch,
-                model.model_type,
-                level="token",
-                hidden_layer=self.hidden_layer,
-            )
+            embeddings = [[] for _ in range(batch_size)]
+            embeddings_last_token = [[] for _ in range(batch_size)]
 
-            for i in range(batch_size):
-                embeddings[i].append(cur_embeddings[i].cpu().detach().numpy())
-                if len(cur_token_embeddings.shape) > 2:
-                    embeddings_last_token[i].append(
-                        cur_token_embeddings[i, -1].cpu().detach().numpy()
-                    )
-                else:
-                    embeddings_last_token[i].append(
-                        cur_token_embeddings[i].cpu().detach().numpy()
-                    )
+            for sample_embeddings in dependencies["sample_embeddings_all"]:
+                out = OutputWrapper()
+                if model.model_type == "CausalLM":
+                    out.hidden_states = sample_embeddings[
+                        "sample_embeddings_all_decoder"
+                    ]
+                elif model.model_type == "Seq2SeqLM":
+                    out.decoder_hidden_states = sample_embeddings[
+                        "sample_embeddings_all_decoder"
+                    ]
+                    out.encoder_hidden_states = sample_embeddings[
+                        "sample_embeddings_all_encoder"
+                    ]
 
-        return {
-            f"sample_embeddings{self.hidden_layer_name}": embeddings,
-            f"sample_embeddings_last_token{self.hidden_layer_name}": embeddings_last_token,
-        }
+                _, cur_embeddings = get_embeddings_from_output(
+                    out,
+                    batch,
+                    model.model_type,
+                    level="sequence",
+                    hidden_layer=layer,
+                )
+                _, cur_token_embeddings = get_embeddings_from_output(
+                    out,
+                    batch,
+                    model.model_type,
+                    level="token",
+                    hidden_layer=layer,
+                )
+
+                for i in range(batch_size):
+                    embeddings[i].append(cur_embeddings[i].cpu().detach().numpy())
+                    if len(cur_token_embeddings.shape) > 2:
+                        embeddings_last_token[i].append(
+                            cur_token_embeddings[i, -1].cpu().detach().numpy()
+                        )
+                    else:
+                        embeddings_last_token[i].append(
+                            cur_token_embeddings[i].cpu().detach().numpy()
+                        )
+            results[f"sample_embeddings{layer_name}"] = embeddings
+            results[f"sample_embeddings_last_token{layer_name}"] = embeddings_last_token
+
+        return results

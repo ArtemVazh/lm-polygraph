@@ -188,7 +188,6 @@ class AllEmbeddingsCalculator(StatCalculator):
         max_new_tokens: int = 100,
     ) -> Dict[str, np.ndarray]:
         batch: Dict[str, torch.Tensor] = model.tokenize(texts)
-        batch = {k: v.to(model.device()) for k, v in batch.items()}
         with torch.no_grad():
             out = model.generate(
                 **batch,
@@ -231,33 +230,34 @@ class OutputWrapper:
 
 
 class EmbeddingsCalculator(StatCalculator):
-    def __init__(self, hidden_layer: int = -1, stage: str = "train"):
-        self.hidden_layer = hidden_layer
+    def __init__(self, hidden_layers: List[int] = [-1], stage: str = "train"):
+        self.hidden_layers = hidden_layers
         self.stage = stage
         if stage == "train":
             self.stage += "_"
-        if self.hidden_layer == -1:
-            self.hidden_layer_name = ""
-        else:
-            self.hidden_layer_name = f"_{self.hidden_layer}"
-        if stage == "train":
-            super().__init__(
-                [
-                    f"{self.stage}embeddings{self.hidden_layer_name}",
-                    f"background_{self.stage}embeddings{self.hidden_layer_name}",
-                    f"{self.stage}token_embeddings{self.hidden_layer_name}",
-                    f"background_{self.stage}token_embeddings{self.hidden_layer_name}",
-                ],
-                [f"{self.stage}embeddings_all"],
-            )
-        else:
-            super().__init__(
-                [
-                    f"{self.stage}embeddings{self.hidden_layer_name}",
-                    f"{self.stage}token_embeddings{self.hidden_layer_name}",
-                ],
-                [f"{self.stage}embeddings_all"],
-            )
+
+        stats = []
+        for layer in self.hidden_layers:
+            if layer == -1:
+                layer_name = ""
+            else:
+                layer_name = f"_{layer}"
+            if stage == "train":
+                stats += [
+                    f"{self.stage}embeddings{layer_name}",
+                    f"background_{self.stage}embeddings{layer_name}",
+                    f"{self.stage}token_embeddings{layer_name}",
+                    f"background_{self.stage}token_embeddings{layer_name}",
+                ]
+            else:
+                stats += [
+                    f"{self.stage}embeddings{layer_name}",
+                    f"{self.stage}token_embeddings{layer_name}",
+                ]
+        super().__init__(
+            stats,
+            [f"{self.stage}embeddings_all"],
+        )
 
     def __call__(
         self,
@@ -276,47 +276,50 @@ class EmbeddingsCalculator(StatCalculator):
                 out.decoder_hidden_states = dependencies["embeddings_all_decoder"]
                 out.encoder_hidden_states = dependencies["embeddings_all_encoder"]
 
-            embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
-                out,
-                batch,
-                model.model_type,
-                level="sequence",
-                hidden_layer=self.hidden_layer,
-            )
-            token_embeddings_encoder, token_embeddings_decoder = (
-                get_embeddings_from_output(
+            results = {}
+            for layer in self.hidden_layers:
+                if layer == -1:
+                    layer_name = ""
+                else:
+                    layer_name = f"_{layer}"
+                embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
                     out,
                     batch,
                     model.model_type,
-                    level="token",
-                    hidden_layer=self.hidden_layer,
+                    level="sequence",
+                    hidden_layer=layer,
                 )
-            )
-            if token_embeddings_decoder is None:
-                token_embeddings_decoder = torch.empty(
-                    (0, embeddings_decoder.shape[-1]), dtype=torch.float32
+                token_embeddings_encoder, token_embeddings_decoder = (
+                    get_embeddings_from_output(
+                        out,
+                        batch,
+                        model.model_type,
+                        level="token",
+                        hidden_layer=layer,
+                    )
                 )
-            elif len(token_embeddings_decoder.shape) == 3:
-                token_embeddings_decoder = token_embeddings_decoder.reshape(
-                    -1, token_embeddings_decoder.shape[-1]
-                )
+                if token_embeddings_decoder is None:
+                    token_embeddings_decoder = torch.empty(
+                        (0, embeddings_decoder.shape[-1]), dtype=torch.float32
+                    )
+                elif len(token_embeddings_decoder.shape) == 3:
+                    token_embeddings_decoder = token_embeddings_decoder.reshape(
+                        -1, token_embeddings_decoder.shape[-1]
+                    )
 
-        if model.model_type == "CausalLM":
-            return {
-                f"embeddings_decoder{self.hidden_layer_name}": embeddings_decoder.cpu()
-                .detach()
-                .numpy(),
-                f"token_embeddings_decoder{self.hidden_layer_name}": token_embeddings_decoder.cpu()
-                .detach()
-                .numpy(),
-            }
-        elif model.model_type == "Seq2SeqLM":
-            return {
-                "embeddings_encoder": embeddings_encoder.cpu().detach().numpy(),
-                "embeddings_decoder": embeddings_decoder.cpu().detach().numpy(),
-            }
-        else:
-            raise NotImplementedError
+                if model.model_type == "CausalLM":
+                    results[f"embeddings_decoder{layer_name}"] = (
+                        embeddings_decoder.cpu().detach().numpy()
+                    )
+                    results[f"token_embeddings_decoder{layer_name}"] = (
+                        token_embeddings_decoder.cpu().detach().numpy()
+                    )
+                elif model.model_type == "Seq2SeqLM":
+                    pass
+                else:
+                    raise NotImplementedError
+
+        return results
 
 
 class SourceEmbeddingsCalculator(StatCalculator):

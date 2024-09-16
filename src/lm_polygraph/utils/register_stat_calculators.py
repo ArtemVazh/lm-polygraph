@@ -100,21 +100,21 @@ def register_stat_calculators(
     _register(SourceEmbeddingsCalculator())
     _register(SamplingGenerationEmbeddingsCalculator())
 
-    _register(EmbeddingsCalculator(stage="train"))
     _register(InternalStatesCalculator(stage="train"))
     _register(TokenInternalStatesCalculator(stage="train"))
 
+    hidden_layers = list(range(model.model.config.num_hidden_layers - 1)) + [-1]
+
+    _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage="train"))
+    _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage=""))
+
+    _register(SamplingGenerationEmbeddingsCalculator(hidden_layers=hidden_layers))
+
     for layer in range(model.model.config.num_hidden_layers - 1):
-        _register(EmbeddingsCalculator(hidden_layer=layer, stage="train"))
         _register(SourceEmbeddingsCalculator(hidden_layer=layer))
 
-    _register(EmbeddingsCalculator(stage=""))
     _register(InternalStatesCalculator(stage=""))
     _register(TokenInternalStatesCalculator(stage=""))
-
-    for layer in range(model.model.config.num_hidden_layers - 1):
-        _register(EmbeddingsCalculator(hidden_layer=layer, stage=""))
-        _register(SamplingGenerationEmbeddingsCalculator(hidden_layer=layer))
 
     log.info("Done intitializing stat calculators...")
 

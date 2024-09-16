@@ -462,6 +462,14 @@ class UEManager:
             batch_stats["tokenizer"] = self.model.tokenizer
             batch_stats = self.calculate(batch_stats, self.stat_calculators, inp_texts)
 
+            tmp_keys = [
+                "embeddings_all_decoder",
+                "embeddings_all_encoder",
+                "sample_embeddings_all",
+            ]
+            for key in tmp_keys:
+                batch_stats.pop(key, None)
+
             batch_estimations, bad_estimators = self.estimate(
                 batch_stats, self.estimators
             )
