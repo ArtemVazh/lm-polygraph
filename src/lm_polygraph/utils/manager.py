@@ -436,7 +436,9 @@ class UEManager:
 
         iterable_data = tqdm(self.data) if self.verbose else self.data
 
-        for batch_i, (inp_texts, target_texts, max_new_tokens) in enumerate(iterable_data):
+        for batch_i, (inp_texts, target_texts, max_new_tokens) in enumerate(
+            iterable_data
+        ):
             batch_stats: Dict[str, np.ndarray] = {}
             for key, val in [
                 ("input_texts", inp_texts),
@@ -559,14 +561,16 @@ class UEManager:
                         else:
                             oracle_score_ = oracle_score
                             random_score_ = random_score
-                            
+
                         ue_metric_val = ue_metric(ue, metric)
                         self.metrics[e_level, e_name, gen_name, str(ue_metric)] = (
                             ue_metric_val
                         )
                         self.metrics[
                             e_level, e_name, gen_name, str(ue_metric) + "_normalized"
-                        ] = normalize_metric(ue_metric_val, oracle_score_, random_score_)
+                        ] = normalize_metric(
+                            ue_metric_val, oracle_score_, random_score_
+                        )
 
         for processor in self.processors:
             processor.on_eval(self.metrics, self.total_bad_estimators)
