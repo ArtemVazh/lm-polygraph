@@ -436,7 +436,7 @@ class UEManager:
 
         iterable_data = tqdm(self.data) if self.verbose else self.data
 
-        for batch_i, (inp_texts, target_texts) in enumerate(iterable_data):
+        for batch_i, (inp_texts, target_texts, max_new_tokens) in enumerate(iterable_data):
             batch_stats: Dict[str, np.ndarray] = {}
             for key, val in [
                 ("input_texts", inp_texts),
@@ -535,9 +535,11 @@ class UEManager:
             torch.cuda.empty_cache()
             gc.collect()
 
-        for (e_level, e_name), estimator_values in self.estimations.items():
-            for (gen_level, gen_name), generation_metric in self.gen_metrics.items():
-                for ue_metric in self.ue_metrics:
+        for (gen_level, gen_name), generation_metric in self.gen_metrics.items():
+            for ue_metric in self.ue_metrics:
+                oracle_score = ue_metric(-generation_metric, generation_metric)
+                random_score = get_random_scores(ue_metric, generation_metric)
+                for (e_level, e_name), estimator_values in self.estimations.items():
                     if gen_level != e_level:
                         continue
                     if len(estimator_values) != len(generation_metric):
@@ -551,15 +553,20 @@ class UEManager:
                     if len(ue) == 0:
                         self.metrics[e_level, e_name, gen_name, str(ue_metric)] = np.nan
                     else:
-                        oracle_score = ue_metric(-metric, metric)
-                        random_score = get_random_scores(ue_metric, metric)
+                        if len(ue) != len(estimator_values):
+                            oracle_score_ = ue_metric(-metric, metric)
+                            random_score_ = get_random_scores(ue_metric, metric)
+                        else:
+                            oracle_score_ = oracle_score
+                            random_score_ = random_score
+                            
                         ue_metric_val = ue_metric(ue, metric)
                         self.metrics[e_level, e_name, gen_name, str(ue_metric)] = (
                             ue_metric_val
                         )
                         self.metrics[
                             e_level, e_name, gen_name, str(ue_metric) + "_normalized"
-                        ] = normalize_metric(ue_metric_val, oracle_score, random_score)
+                        ] = normalize_metric(ue_metric_val, oracle_score_, random_score_)
 
         for processor in self.processors:
             processor.on_eval(self.metrics, self.total_bad_estimators)
@@ -661,7 +668,7 @@ class UEManager:
             stat_calculators = self.train_stat_calculators
             max_new_tokens = self.max_new_tokens
         if len(stat_calculators) and (data is not None):
-            for inp_texts, target_texts in tqdm(data):
+            for inp_texts, target_texts, max_new_tokens in tqdm(data):
                 target_tokens = self._tokenize_target_texts(target_texts)
 
                 batch_stats: Dict[str, np.ndarray] = {}
@@ -674,7 +681,7 @@ class UEManager:
 
                 for stat_calculator in stat_calculators:
                     new_stats = stat_calculator(
-                        batch_stats, inp_texts, self.model, max_new_tokens
+                        batch_stats, inp_texts, self.model, max(max_new_tokens)
                     )
                     for stat, stat_value in new_stats.items():
                         if stat in batch_stats.keys():
