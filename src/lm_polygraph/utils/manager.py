@@ -539,8 +539,8 @@ class UEManager:
 
         for (gen_level, gen_name), generation_metric in self.gen_metrics.items():
             for ue_metric in self.ue_metrics:
-                oracle_score = ue_metric(-generation_metric, generation_metric)
-                random_score = get_random_scores(ue_metric, generation_metric)
+                oracle_score = ue_metric(-np.array(generation_metric), np.array(generation_metric))
+                random_score = get_random_scores(ue_metric, np.array(generation_metric))
                 for (e_level, e_name), estimator_values in self.estimations.items():
                     if gen_level != e_level:
                         continue
