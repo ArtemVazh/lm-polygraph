@@ -3,7 +3,6 @@ import numpy as np
 
 from typing import Dict, List
 
-from .embeddings import get_embeddings_from_output
 from .stat_calculator import StatCalculator
 from lm_polygraph.utils.model import WhiteboxModel, BlackboxModel
 
@@ -142,20 +141,6 @@ class GreedyProbsCalculator(StatCalculator):
 
             attentions = out.attentions
             sequences = out.sequences
-            embeddings_encoder, embeddings_decoder = get_embeddings_from_output(
-                out, batch, model.model_type, level="sequence"
-            )
-            token_embeddings_encoder, token_embeddings_decoder = (
-                get_embeddings_from_output(out, batch, model.model_type, level="token")
-            )
-            if token_embeddings_decoder is None:
-                token_embeddings_decoder = torch.empty(
-                    (0, embeddings_decoder.shape[-1]), dtype=torch.float32
-                )
-            elif len(token_embeddings_decoder.shape) == 3:
-                token_embeddings_decoder = token_embeddings_decoder.reshape(
-                    -1, token_embeddings_decoder.shape[-1]
-                )
 
         cut_logits = []
         cut_sequences = []

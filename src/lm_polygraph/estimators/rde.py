@@ -116,7 +116,9 @@ class RDESeq(Estimator):
             ]
             n_samples = train_embeddings.shape[0]
             if n_samples > 1000:
-                indices = random.choice(np.arange(n_samples), size=1000, replace=False)
+                indices = np.random.choice(
+                    np.arange(n_samples), size=1000, replace=False
+                )
                 self.pca.fit(train_embeddings[indices])
                 X_pca_train = self.pca.transform(train_embeddings)
             else:
