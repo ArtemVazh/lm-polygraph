@@ -460,7 +460,7 @@ class UEManager:
             background_train_stats_keys = list(background_train_stats.keys())
             for stat in background_train_stats_keys:
                 batch_stats[stat] = background_train_stats.pop(stat)
-
+                
             batch_stats["tokenizer"] = self.model.tokenizer
             batch_stats = self.calculate(batch_stats, self.stat_calculators, inp_texts)
 
@@ -470,7 +470,8 @@ class UEManager:
                 "sample_embeddings_all",
             ]
             for key in tmp_keys:
-                batch_stats.pop(key, None)
+                if key in batch_stats.keys():
+                    del batch_stats[key]
 
             batch_estimations, bad_estimators = self.estimate(
                 batch_stats, self.estimators
@@ -504,6 +505,7 @@ class UEManager:
                     self.stats[key] += batch_stats[key]
             for processor in self.processors:
                 processor.on_batch(batch_stats, batch_gen_metrics, batch_estimations)
+
 
         if self.ensemble_model is not None:
             iterable_data = tqdm(self.data) if self.verbose else self.data
@@ -708,23 +710,20 @@ class UEManager:
                 gc.collect()
 
             key_prefix = "background_train_" if background else "train_"
-            for stat in train_stats.keys():
+            keys = list(train_stats.keys())
+            for stat in keys:
                 if any(s is None for s in train_stats[stat]):
                     continue
-                if isinstance(train_stats[stat][0], list):
+                try:
                     result_train_stat[key_prefix + stat] = [
-                        item for sublist in train_stats[stat] for item in sublist
+                            item for sublist in train_stats[stat] for item in sublist
                     ]
-                else:
-                    try:
-                        result_train_stat[key_prefix + stat] = np.concatenate(
-                            train_stats[stat]
-                        )
-                    except Exception as e:
-                        print(e)
-                        print("Continue")
-                        continue
-
+                    del train_stats[stat]
+                except Exception as e:
+                    print(e)
+                    print("Continue")
+                    continue                  
+            
         return result_train_stat
 
     def _tokenize_target_texts(self, target_texts: List[str]) -> List[List[int]]:

@@ -111,9 +111,9 @@ class RDESeq(Estimator):
             self.pca = KernelPCA(
                 n_components=50, kernel="rbf", random_state=42, gamma=None
             )
-            train_embeddings = stats[
+            train_embeddings = np.stack(stats[
                 f"train_embeddings_{self.embeddings_type}{self.hidden_layer_name}"
-            ]
+            ])
             n_samples = train_embeddings.shape[0]
             if n_samples > 1000:
                 indices = np.random.choice(

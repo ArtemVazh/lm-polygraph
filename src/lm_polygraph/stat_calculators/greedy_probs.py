@@ -173,7 +173,6 @@ class GreedyProbsCalculator(StatCalculator):
                     key=lambda x: x[0] == cut_sequences[-1][j],
                     reverse=True,
                 )
-
         attn_features = []
         attention_all = []
         # attn_features_max = []
