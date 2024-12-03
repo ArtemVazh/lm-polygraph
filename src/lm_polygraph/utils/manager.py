@@ -462,7 +462,7 @@ class UEManager:
                 batch_stats[stat] = background_train_stats.pop(stat)
                 
             batch_stats["tokenizer"] = self.model.tokenizer
-            batch_stats = self.calculate(batch_stats, self.stat_calculators, inp_texts)
+            batch_stats = self.calculate(batch_stats, self.stat_calculators, inp_texts, max(max_new_tokens))
 
             tmp_keys = [
                 "embeddings_all_decoder",
@@ -581,7 +581,7 @@ class UEManager:
 
         return self.metrics
 
-    def calculate(self, batch_stats: dict, calculators: list, inp_texts: list) -> dict:
+    def calculate(self, batch_stats: dict, calculators: list, inp_texts: list, max_new_tokens: int = None) -> dict:
         """
         Runs stat calculators and handles errors if any occur. Returns updated batch stats
 
@@ -592,10 +592,11 @@ class UEManager:
         """
 
         for stat_calculator in calculators:
+            max_new_tokens_current = self.max_new_tokens if max_new_tokens is None else max_new_tokens
             try:
                 start = time.time()
                 new_stats = stat_calculator(
-                    batch_stats, inp_texts, self.model, self.max_new_tokens
+                    batch_stats, inp_texts, self.model, max_new_tokens_current
                 )
                 end = time.time()
 
@@ -727,6 +728,10 @@ class UEManager:
         return result_train_stat
 
     def _tokenize_target_texts(self, target_texts: List[str]) -> List[List[int]]:
+        if not len(target_texts):
+            print("Empty Target Texts:", target_texts)
+            return [self.model.tokenizer("")["input_ids"]]
+        
         if isinstance(target_texts[0], list):
             target_tokens = [
                 [self.model.tokenizer([text])["input_ids"][0] for text in target_text]

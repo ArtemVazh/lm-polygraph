@@ -107,6 +107,12 @@ def register_stat_calculators(
 
     _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage="train"))
     _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage=""))
+    
+    _register(ProxyEmbeddingsCalculator(hidden_layers=hidden_layers, stage="train"))
+    _register(ProxyEmbeddingsCalculator(hidden_layers=hidden_layers, stage=""))
+    
+    _register(ProxyEmbeddingsBaseCalculator(hidden_layers=hidden_layers, stage="train"))
+    _register(ProxyEmbeddingsBaseCalculator(hidden_layers=hidden_layers, stage=""))
 
     _register(SamplingGenerationEmbeddingsCalculator(hidden_layers=hidden_layers))
 

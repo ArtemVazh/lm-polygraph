@@ -27,6 +27,8 @@ from .embeddings import (
     SourceEmbeddingsCalculator,
     InternalStatesCalculator,
     TokenInternalStatesCalculator,
+    ProxyEmbeddingsBaseCalculator,
+    ProxyEmbeddingsCalculator
 )
 from .ensemble_token_data import EnsembleTokenLevelDataCalculator
 from .semantic_matrix import SemanticMatrixCalculator

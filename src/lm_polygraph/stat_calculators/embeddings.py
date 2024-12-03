@@ -5,7 +5,7 @@ from typing import Dict, List
 
 from .stat_calculator import StatCalculator
 from lm_polygraph.utils.model import WhiteboxModel
-
+from transformers import AutoTokenizer, AutoModel
 
 def get_embeddings_from_output(
     output,
@@ -178,7 +178,7 @@ def aggregate(x, aggregation_method, axis):
 
 class AllEmbeddingsCalculator(StatCalculator):
     def __init__(self):
-        super().__init__(["train_embeddings_all"], [])
+        super().__init__(["train_embeddings_all", "train_greedy_texts"], [])
 
     def __call__(
         self,
@@ -209,10 +209,31 @@ class AllEmbeddingsCalculator(StatCalculator):
                     ]
                 ),
             )
+            
+            sequences = out.sequences
+
+        cut_sequences = []
+        cut_texts = []
+        for i in range(len(texts)):
+            if model.model_type == "CausalLM":
+                idx = batch["input_ids"].shape[1]
+                seq = sequences[i, idx:].cpu()
+            else:
+                seq = sequences[i, 1:].cpu()
+            length, text_length = len(seq), len(seq)
+            for j in range(len(seq)):
+                if seq[j] == model.tokenizer.eos_token_id:
+                    length = j + 1
+                    text_length = j
+                    break
+            cut_sequences.append(seq[:length].tolist())
+            cut_texts.append(model.tokenizer.decode(seq[:text_length]))
 
         if model.model_type == "CausalLM":
             return {
                 "embeddings_all_decoder": out.hidden_states,
+                "greedy_tokens": cut_sequences,
+                "greedy_texts": cut_texts,
             }
         elif model.model_type == "Seq2SeqLM":
             return {
@@ -374,7 +395,75 @@ class SourceEmbeddingsCalculator(StatCalculator):
                 }
         else:
             raise NotImplementedError
+        
+class ProxyEmbeddingsBaseCalculator(StatCalculator):
+    def __init__(self, stage: str = "train"):
+        self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+        self.model = AutoModel.from_pretrained("bert-base-uncased")
+        self.stage = stage
+        if stage == "train":
+            self.stage += "_"
+        super().__init__([f"{self.stage}proxy_embeddings_all"], [f"{self.stage}greedy_texts"])
 
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+    ) -> Dict[str, np.ndarray]:
+        batch: Dict[str, torch.Tensor] = model.tokenize(texts)
+        batch = {k: v.to(model.device()) for k, v in batch.items()}
+        with torch.no_grad():
+            encoded_input = self.tokenizer(dependencies["greedy_texts"], return_tensors='pt')
+            output = self.model(**encoded_input, output_hidden_states=True)
+        
+        return {"proxy_embeddings_all": output.hidden_states}
+    
+class ProxyEmbeddingsCalculator(StatCalculator):
+    def __init__(self, hidden_layers: List[int] = [-1], stage: str = "train"):
+        self.hidden_layers = hidden_layers
+        self.stage = stage
+        if stage == "train":
+            self.stage += "_"
+
+        stats = []
+        for layer in self.hidden_layers:
+            if layer == -1:
+                layer_name = ""
+            else:
+                layer_name = f"_{layer}"
+            stats += [
+                f"{self.stage}proxy_token_embeddings{layer_name}",
+            ]
+            
+        super().__init__(
+            stats,
+            [f"{self.stage}proxy_embeddings_all"],
+        )
+
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+    ) -> Dict[str, np.ndarray]:
+        batch: Dict[str, torch.Tensor] = model.tokenize(texts)
+        batch = {k: v.to(model.device()) for k, v in batch.items()}
+        with torch.no_grad():
+            hidden_states = dependencies["proxy_embeddings_all"]
+            results = {}
+            for layer in self.hidden_layers:
+                if layer == -1:
+                    layer_name = ""
+                else:
+                    layer_name = f"_{layer}"
+                token_embeddings = hidden_states[layer]
+                results[f"proxy_token_embeddings{layer_name}"] = (
+                    token_embeddings.cpu().detach().numpy()
+                )
+        return results
 
 class InternalStatesCalculator(StatCalculator):
     def __init__(self, topk: int = 10, stage: str = "train"):
