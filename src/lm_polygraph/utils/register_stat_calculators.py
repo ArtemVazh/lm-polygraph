@@ -41,7 +41,7 @@ def register_stat_calculators(
     log.info("=" * 100)
     log.info("Initializing stat calculators...")
 
-    openai_chat = OpenAIChat(openai_model="gpt-4o", cache_path=cache_path)
+    openai_chat = OpenAIChat(openai_model="gpt-4o-mini", cache_path=cache_path)
 
     def _register(calculator_class: StatCalculator):
         for stat in calculator_class.stats:

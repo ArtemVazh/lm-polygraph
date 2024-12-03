@@ -18,7 +18,7 @@ class OpenAIChat:
 
     def __init__(
         self,
-        openai_model: str = "gpt-4-turbo-2024-04-09",
+        openai_model: str = "gpt-4o-mini",
         cache_path: str = os.path.expanduser("~") + "/.cache",
     ):
         """
@@ -44,8 +44,16 @@ class OpenAIChat:
 
     def ask(self, message: str) -> str:
         # check if the message is cached
-        with open(self.cache_path, "r") as f:
-            openai_responses = json.load(f)
+        while True:
+            # try to open file, repeat if occured an error due to the file is open by another process 
+            try:
+                with open(self.cache_path, "r") as f:
+                    openai_responses = json.load(f)
+                break
+            except Exception as e: 
+                log.info(f"Possibly cache file is opened; failed with exception: {e}. Retry after 3 seconds.")
+                time.sleep(2)
+                continue
 
         if message in openai_responses.get(self.openai_model, {}).keys():
             reply = openai_responses[self.openai_model][message]
@@ -66,13 +74,28 @@ class OpenAIChat:
 
             # add reply to cache
             with self.cache_lock:
-                with open(self.cache_path, "r") as f:
-                    openai_responses = json.load(f)
+                while True:
+                    # try to open file, repeat if occured an error due to the file is open by another process 
+                    try:
+                        with open(self.cache_path, "r") as f:
+                            openai_responses = json.load(f)
+                        break
+                    except Exception as e: 
+                        log.info(f"Possibly cache file is opened; failed with exception: {e}. Retry after 3 seconds.")
+                        time.sleep(2)
+                        continue
                 if self.openai_model not in openai_responses.keys():
                     openai_responses[self.openai_model] = {}
                 openai_responses[self.openai_model][message] = reply
-                with open(self.cache_path, "w") as f:
-                    json.dump(openai_responses, f)
+                while True:
+                    try:
+                        with open(self.cache_path, "w") as f:
+                            json.dump(openai_responses, f)
+                        break
+                    except Exception as e: 
+                        log.info(f"Possibly cache file is opened; failed with exception: {e}. Retry after 3 seconds.")
+                        time.sleep(2)
+                        continue
 
         if "please provide" in reply.lower():
             return ""
