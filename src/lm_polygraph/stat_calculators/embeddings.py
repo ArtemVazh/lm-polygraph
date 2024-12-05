@@ -403,7 +403,7 @@ class ProxyEmbeddingsBaseCalculator(StatCalculator):
         self.stage = stage
         if stage == "train":
             self.stage += "_"
-        super().__init__([f"{self.stage}proxy_embeddings_all"], [f"{self.stage}greedy_texts"])
+        super().__init__([f"{self.stage}proxy_embeddings_all", f"{self.stage}proxy_tokens"], [f"{self.stage}greedy_texts"])
 
     def __call__(
         self,
@@ -417,8 +417,9 @@ class ProxyEmbeddingsBaseCalculator(StatCalculator):
         with torch.no_grad():
             encoded_input = self.tokenizer(dependencies["greedy_texts"], return_tensors='pt')
             output = self.model(**encoded_input, output_hidden_states=True)
-        
-        return {"proxy_embeddings_all": output.hidden_states}
+
+        proxy_tokens = encoded_input["input_ids"].cpu().detach().numpy().tolist()
+        return {"proxy_embeddings_all": output.hidden_states, "proxy_tokens": proxy_tokens}
     
 class ProxyEmbeddingsCalculator(StatCalculator):
     def __init__(self, hidden_layers: List[int] = [-1], stage: str = "train"):
@@ -460,8 +461,8 @@ class ProxyEmbeddingsCalculator(StatCalculator):
                 else:
                     layer_name = f"_{layer}"
                 token_embeddings = hidden_states[layer]
-                results[f"proxy_token_embeddings{layer_name}"] = (
-                    token_embeddings.cpu().detach().numpy()
+                results[f"proxy_token_embeddings_decoder{layer_name}"] = (
+                    token_embeddings.cpu().detach().numpy().reshape(-1, token_embeddings.shape[-1])
                 )
         return results
 
