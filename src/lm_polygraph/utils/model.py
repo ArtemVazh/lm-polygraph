@@ -4,6 +4,8 @@ import sys
 import openai
 import time
 import logging
+import os
+import httpx
 
 from dataclasses import asdict
 from typing import List, Dict, Optional, Union
@@ -113,6 +115,7 @@ class BlackboxModel(Model):
         super().__init__(model_path, "Blackbox")
         self.parameters = parameters
         self.openai_api_key = openai_api_key
+        self.http_proxy_url = os.environ.get("openai_http_proxy_url", None)
         openai.api_key = openai_api_key
         self.hf_api_token = hf_api_token
 
@@ -195,11 +198,21 @@ class BlackboxModel(Model):
                 retries = 0
                 while True:
                     try:
-                        response = openai.ChatCompletion.create(
+                        client = openai.OpenAI(
+                            # This is the default and can be omitted
+                            api_key=self.openai_api_key,
+                            http_client=httpx.Client(proxies=self.http_proxy_url),
+                        )
+                        response = client.chat.completions.create(
                             model=self.model_path,
                             messages=messages,
                             **args,
                         )
+                        # response = openai.ChatCompletion.create(
+                        #     model=self.model_path,
+                        #     messages=messages,
+                        #     **args,
+                        # )
                         break
                     except Exception as e:
                         if retries > 4:

@@ -13,7 +13,7 @@ class BlackboxSamplingGenerationCalculator(StatCalculator):
     Calculates several sampled texts for Blackbox model (lm_polygraph.BlackboxModel).
     """
 
-    def __init__(self, samples_n: int = 10):
+    def __init__(self, samples_n: int = 5):
         """
         Parameters:
             samples_n (int): number of samples to generate per input text. Default: 10
@@ -39,14 +39,14 @@ class BlackboxSamplingGenerationCalculator(StatCalculator):
         Returns:
             Dict[str, np.ndarray]: dictionary with List[List[str]] sampled texts at 'sample_texts' key.
         """
-        samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n)
         if isinstance(model, BlackboxModel):
             samples = model.generate_texts(
                 input_texts=texts,
                 max_new_tokens=max_new_tokens,
-                n=samples_n,
+                n=self.samples_n,
             )
         else:
+            samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n)
             samples = [[] for _ in range(len(texts))]
             out = model.generate_texts(
                 input_texts=texts,

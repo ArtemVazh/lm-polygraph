@@ -48,6 +48,7 @@ def register_stat_calculators(
     def _register(calculator_class: StatCalculator):
         for stat in calculator_class.stats:
             if stat in stat_calculators.keys():
+                print(stat, stat_calculators.keys())
                 raise ValueError(
                     "A statistic is supposed to be processed by a single calculator only."
                 )
@@ -61,6 +62,17 @@ def register_stat_calculators(
     if isinstance(model, BlackboxModel):
         _register(BlackboxGreedyTextsCalculator())
         _register(BlackboxSamplingGenerationCalculator())
+
+        proxy_models = ["bert-base-uncased", "bert-large-uncased", "google/electra-small-discriminator", "roberta-base", "roberta-large",
+                    "meta-llama/Llama-3.2-1B", "meta-llama/Llama-3.2-3B", "meta-llama/Llama-3.1-8B"]
+
+        for proxy_model in proxy_models:
+            cfg = AutoConfig.from_pretrained(proxy_model)
+            proxy_hidden_layers = list(range(cfg.num_hidden_layers-1)) + [-1]
+            
+            _register(ProxyEmbeddingsCalculator(proxy_model=proxy_model, hidden_layers=proxy_hidden_layers, stage="train"))
+            _register(ProxyEmbeddingsCalculator(proxy_model=proxy_model, hidden_layers=proxy_hidden_layers, stage=""))
+        
     else:
         _register(GreedyProbsCalculator(n_alternatives=n_ccp_alternatives))
         _register(EntropyCalculator())
@@ -68,7 +80,7 @@ def register_stat_calculators(
         _register(SamplingGenerationCalculator())
         _register(BartScoreCalculator())
         _register(ModelScoreCalculator())
-        _register(EmbeddingsCalculator())
+        # _register(EmbeddingsCalculator())
         _register(EnsembleTokenLevelDataCalculator())
         _register(CrossEncoderSimilarityMatrixCalculator(nli_model=nli_model))
         _register(GreedyAlternativesNLICalculator(nli_model=nli_model))
@@ -103,35 +115,25 @@ def register_stat_calculators(
             )
         )
 
-    _register(AllEmbeddingsCalculator())
-    _register(SourceEmbeddingsCalculator())
-    _register(SamplingGenerationEmbeddingsCalculator())
+        _register(AllEmbeddingsCalculator())
+        _register(SourceEmbeddingsCalculator())
+        # _register(SamplingGenerationEmbeddingsCalculator())
+    
+        _register(InternalStatesCalculator(stage="train"))
+        _register(TokenInternalStatesCalculator(stage="train"))
+    
+        hidden_layers = list(range(model.model.config.num_hidden_layers - 1)) + [-1]
+    
+        _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage="train"))
+        _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage=""))
 
-    _register(InternalStatesCalculator(stage="train"))
-    _register(TokenInternalStatesCalculator(stage="train"))
+        _register(SamplingGenerationEmbeddingsCalculator(hidden_layers=hidden_layers))
 
-    hidden_layers = list(range(model.model.config.num_hidden_layers - 1)) + [-1]
-
-    _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage="train"))
-    _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage=""))
-
-    proxy_models = ["bert-base-uncased", "bert-large-uncased", "google/electra-small-discriminator", "roberta-base", "roberta-large",
-                    "meta-llama/Llama-3.2-1B", "meta-llama/Llama-3.2-3B", "meta-llama/Llama-3.1-8B"]
-
-    for proxy_model in proxy_models:
-        cfg = AutoConfig.from_pretrained(proxy_model)
-        proxy_hidden_layers = list(range(cfg.num_hidden_layers-1)) + [-1]
-        
-        _register(ProxyEmbeddingsCalculator(proxy_model=proxy_model, hidden_layers=proxy_hidden_layers, stage="train"))
-        _register(ProxyEmbeddingsCalculator(proxy_model=proxy_model, hidden_layers=proxy_hidden_layers, stage=""))
-
-    _register(SamplingGenerationEmbeddingsCalculator(hidden_layers=hidden_layers))
-
-    for layer in range(model.model.config.num_hidden_layers - 1):
-        _register(SourceEmbeddingsCalculator(hidden_layer=layer))
-
-    _register(InternalStatesCalculator(stage=""))
-    _register(TokenInternalStatesCalculator(stage=""))
+        for layer in range(model.model.config.num_hidden_layers - 1):
+            _register(SourceEmbeddingsCalculator(hidden_layer=layer))
+    
+        _register(InternalStatesCalculator(stage=""))
+        _register(TokenInternalStatesCalculator(stage=""))
 
     log.info("Done intitializing stat calculators...")
 

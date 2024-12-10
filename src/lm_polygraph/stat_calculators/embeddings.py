@@ -417,9 +417,11 @@ class ProxyEmbeddingsCalculator(StatCalculator):
         self.proxy_model = proxy_model
         self.model_name = NAMING_MAP[proxy_model]
         self.hidden_layers = hidden_layers
+        
         stats = []
         if stage == "train":
             self.stage += "_"
+            stats.append(f"{self.stage}proxy_{self.model_name}_tokens")
             for layer in self.hidden_layers:
                 if layer == -1:
                     layer_name = ""
@@ -427,16 +429,18 @@ class ProxyEmbeddingsCalculator(StatCalculator):
                     layer_name = f"_{layer}"
                 stats += [
                     f"{self.stage}proxy_{self.model_name}_token_embeddings{layer_name}",
-                    f"background_{self.stage}proxy_{self.model_name}_token_embeddings{layer_name}",
+                    # f"background_{self.stage}proxy_{self.model_name}_token_embeddings{layer_name}",
                 ]
             
             super().__init__(
                 stats,
                 [f"{self.stage}greedy_texts",
-                 f"background_{self.stage}greedy_texts"],
+                 # f"background_{self.stage}greedy_texts"
+                ],
             )
 
         else:
+            stats.append(f"{self.stage}proxy_{self.model_name}_tokens")
             for layer in self.hidden_layers:
                 if layer == -1:
                     layer_name = ""
@@ -461,9 +465,7 @@ class ProxyEmbeddingsCalculator(StatCalculator):
         full_texts = []
         for input_text, text in zip(dependencies["input_texts"], dependencies["greedy_texts"]):
             full_texts.append(input_text+text)
-        batch: Dict[str, torch.Tensor] = model.tokenize(full_texts)        
-        batch = {k: v.to(model.device()) for k, v in batch.items()}
-
+            
         if self.model is None:
             self.tokenizer = AutoTokenizer.from_pretrained(self.proxy_model, truncation_side='left')
             if self.model_name in ["bert_base", "bert_large", "electra_base", "roberta_base", "roberta_large"]:

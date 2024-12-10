@@ -13,7 +13,7 @@ class BlackboxGreedyTextsCalculator(StatCalculator):
     """
 
     def __init__(self):
-        super().__init__(["greedy_texts"], [])
+        super().__init__(["greedy_texts", "train_greedy_texts", "train_target_texts"], [])
 
     def __call__(
         self,
@@ -68,10 +68,10 @@ class GreedyProbsCalculator(StatCalculator):
                 "embeddings_all",
                 # "attention_features",
                 # "attention_weights",
-                "train_embeddings_all",
+                # "train_embeddings_all",
                 "train_attention_features",
-                "train_greedy_texts",
-                "train_greedy_tokens",
+                # "train_greedy_texts",
+                # "train_greedy_tokens",
                 "train_target_texts",
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",

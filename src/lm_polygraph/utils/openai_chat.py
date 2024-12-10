@@ -25,7 +25,7 @@ class OpenAIChat:
         openai_model: str
             the model to use in OpenAI to chat.
         """
-        self.api_key = os.environ.get("OPENAI_KEY", None)
+        self.api_key = os.environ.get("OPENAI_API_KEY", None)
         self.http_proxy_url = os.environ.get("openai_http_proxy_url", None)
         if self.api_key is not None:
             openai.api_key = self.api_key
