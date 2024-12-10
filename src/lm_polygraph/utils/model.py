@@ -6,6 +6,7 @@ import time
 import logging
 import os
 import httpx
+import diskcache as dc
 
 from dataclasses import asdict
 from typing import List, Dict, Optional, Union
@@ -103,6 +104,7 @@ class BlackboxModel(Model):
         model_path: str = None,
         hf_api_token: str = None,
         parameters: GenerationParameters = GenerationParameters(),
+        cache_path: str = os.path.expanduser("~") + "/.cache",
     ):
         """
         Parameters:
@@ -118,6 +120,10 @@ class BlackboxModel(Model):
         self.http_proxy_url = os.environ.get("openai_http_proxy_url", None)
         openai.api_key = openai_api_key
         self.hf_api_token = hf_api_token
+
+        self.cache_path = os.path.join(cache_path, "openai_chat_cache.diskcache")
+        if not os.path.exists(cache_path):
+            os.makedirs(cache_path)
 
     def _query(self, payload):
         API_URL = f"https://api-inference.huggingface.co/models/{self.model_path}"
@@ -162,6 +168,12 @@ class BlackboxModel(Model):
         ):
             raise Exception("Cannot access logits for blackbox model")
 
+        cache_settings = dc.DEFAULT_SETTINGS.copy()
+        cache_settings["eviction_policy"] = "none"
+        cache_settings["size_limit"] = int(1e12)
+        cache_settings["cull_limit"] = 0
+        openai_responses = dc.Cache(self.cache_path, **cache_settings)
+
         for delete_key in [
             "do_sample",
             "min_length",
@@ -182,49 +194,59 @@ class BlackboxModel(Model):
 
         if self.openai_api_key is not None:
             for prompt in input_texts:
-                if isinstance(prompt, str):
-                    # If prompt is a string, create a single message with "user" role
-                    messages = [{"role": "user", "content": prompt}]
-                elif isinstance(prompt, list) and all(
-                    isinstance(item, dict) for item in prompt
-                ):
-                    # If prompt is a list of dictionaries, assume it's already structured as chat
-                    messages = prompt
-                else:
-                    raise ValueError(
-                        "Invalid prompt format. Must be either a string or a list of dictionaries."
-                    )
 
-                retries = 0
-                while True:
-                    try:
-                        client = openai.OpenAI(
-                            # This is the default and can be omitted
-                            api_key=self.openai_api_key,
-                            http_client=httpx.Client(proxies=self.http_proxy_url),
-                        )
-                        response = client.chat.completions.create(
-                            model=self.model_path,
-                            messages=messages,
-                            **args,
-                        )
-                        # response = openai.ChatCompletion.create(
-                        #     model=self.model_path,
-                        #     messages=messages,
-                        #     **args,
-                        # )
-                        break
-                    except Exception as e:
-                        if retries > 4:
-                            raise Exception from e
-                        else:
-                            retries += 1
-                            continue
-
-                if args["n"] == 1:
-                    texts.append(response.choices[0].message.content)
+                if (self.model_path, prompt, args["n"]) in openai_responses:
+                    reply = openai_responses[(self.model_path, prompt, args["n"])]
                 else:
-                    texts.append([resp.message.content for resp in response.choices])
+                    if isinstance(prompt, str):
+                        # If prompt is a string, create a single message with "user" role
+                        messages = [{"role": "user", "content": prompt}]
+                    elif isinstance(prompt, list) and all(
+                        isinstance(item, dict) for item in prompt
+                    ):
+                        # If prompt is a list of dictionaries, assume it's already structured as chat
+                        messages = prompt
+                    else:
+                        raise ValueError(
+                            "Invalid prompt format. Must be either a string or a list of dictionaries."
+                        )
+    
+                    retries = 0
+                    while True:
+                        try:
+                            client = openai.OpenAI(
+                                # This is the default and can be omitted
+                                api_key=self.openai_api_key,
+                                http_client=httpx.Client(proxies=self.http_proxy_url),
+                            )
+                            response = client.chat.completions.create(
+                                model=self.model_path,
+                                messages=messages,
+                                **args,
+                            )
+                            # response = openai.ChatCompletion.create(
+                            #     model=self.model_path,
+                            #     messages=messages,
+                            #     **args,
+                            # )
+                            break
+                        except Exception as e:
+                            if retries > 4:
+                                raise Exception from e
+                            else:
+                                retries += 1
+                                continue
+
+                    if args["n"] == 1:
+                        reply = response.choices[0].message.content
+                    else:
+                        reply = [resp.message.content for resp in response.choices]
+
+                    openai_responses[(self.model_path, prompt, args["n"])] = reply
+                    openai_responses.close()
+                
+                texts.append(reply)
+
         elif (self.hf_api_token is not None) & (self.model_path is not None):
             for prompt in input_texts:
                 start = time.time()
