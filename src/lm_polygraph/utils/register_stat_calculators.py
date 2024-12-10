@@ -4,6 +4,7 @@ import logging
 from lm_polygraph.stat_calculators import *
 from lm_polygraph.utils.deberta import Deberta, MultilingualDeberta
 from lm_polygraph.utils.openai_chat import OpenAIChat
+from transformers import AutoConfig
 
 from typing import Dict, List, Optional, Tuple
 
@@ -108,13 +109,15 @@ def register_stat_calculators(
     _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage="train"))
     _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage=""))
 
-    proxy_hidden_layers = list(range(12)) + [-1]
-    
-    _register(ProxyEmbeddingsCalculator(hidden_layers=proxy_hidden_layers, stage="train"))
-    _register(ProxyEmbeddingsCalculator(hidden_layers=proxy_hidden_layers, stage=""))
-    
-    _register(ProxyEmbeddingsBaseCalculator(stage="train"))
-    _register(ProxyEmbeddingsBaseCalculator(stage=""))
+    proxy_models = ["bert-base-uncased", "bert-large-uncased", "google/electra-small-discriminator", "roberta-base", "roberta-large",
+                    "meta-llama/Llama-3.2-1B", "meta-llama/Llama-3.2-3B", "meta-llama/Llama-3.1-8B"]
+
+    for proxy_model in proxy_models:
+        cfg = AutoConfig.from_pretrained(proxy_model)
+        proxy_hidden_layers = list(range(cfg.num_hidden_layers-1)) + [-1]
+        
+        _register(ProxyEmbeddingsCalculator(proxy_model=proxy_model, hidden_layers=proxy_hidden_layers, stage="train"))
+        _register(ProxyEmbeddingsCalculator(proxy_model=proxy_model, hidden_layers=proxy_hidden_layers, stage=""))
 
     _register(SamplingGenerationEmbeddingsCalculator(hidden_layers=hidden_layers))
 

@@ -7,6 +7,18 @@ from .stat_calculator import StatCalculator
 from lm_polygraph.utils.model import WhiteboxModel
 from transformers import AutoTokenizer, AutoModel
 
+
+NAMING_MAP = {"bert-base-uncased": "bert_base", 
+              "bert-large-uncased": "bert_large", 
+              "google/electra-small-discriminator": "electra_base", 
+              "roberta-base": "roberta_base", 
+              "roberta-large": "roberta_large",
+              "meta-llama/Llama-3.2-1B": "llama1b", 
+              "meta-llama/Llama-3.2-3B": "llama3b", 
+              "meta-llama/Llama-3.1-8B": "llama8b"}
+
+MODELS = {}
+
 def get_embeddings_from_output(
     output,
     batch,
@@ -178,7 +190,7 @@ def aggregate(x, aggregation_method, axis):
 
 class AllEmbeddingsCalculator(StatCalculator):
     def __init__(self):
-        super().__init__(["train_embeddings_all", "train_greedy_texts"], [])
+        super().__init__(["train_embeddings_all", "train_greedy_texts", "background_train_greedy_texts"], [])
 
     def __call__(
         self,
@@ -188,6 +200,7 @@ class AllEmbeddingsCalculator(StatCalculator):
         max_new_tokens: int = 100,
     ) -> Dict[str, np.ndarray]:
         batch: Dict[str, torch.Tensor] = model.tokenize(texts)
+        batch = {k: v.to(model.device()) for k, v in batch.items()}
         with torch.no_grad():
             out = model.generate(
                 **batch,
@@ -396,74 +409,102 @@ class SourceEmbeddingsCalculator(StatCalculator):
         else:
             raise NotImplementedError
         
-class ProxyEmbeddingsBaseCalculator(StatCalculator):
-    def __init__(self, stage: str = "train"):
-        self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-        self.model = AutoModel.from_pretrained("bert-base-uncased")
-        self.stage = stage
-        if stage == "train":
-            self.stage += "_"
-        super().__init__([f"{self.stage}proxy_embeddings_all", f"{self.stage}proxy_tokens"], [f"{self.stage}greedy_texts"])
-
-    def __call__(
-        self,
-        dependencies: Dict[str, np.array],
-        texts: List[str],
-        model: WhiteboxModel,
-        max_new_tokens: int = 100,
-    ) -> Dict[str, np.ndarray]:
-        batch: Dict[str, torch.Tensor] = model.tokenize(texts)
-        batch = {k: v.to(model.device()) for k, v in batch.items()}
-        with torch.no_grad():
-            encoded_input = self.tokenizer(dependencies["greedy_texts"], return_tensors='pt')
-            output = self.model(**encoded_input, output_hidden_states=True)
-
-        proxy_tokens = encoded_input["input_ids"].cpu().detach().numpy().tolist()
-        return {"proxy_embeddings_all": output.hidden_states, "proxy_tokens": proxy_tokens}
-    
 class ProxyEmbeddingsCalculator(StatCalculator):
-    def __init__(self, hidden_layers: List[int] = [-1], stage: str = "train"):
-        self.hidden_layers = hidden_layers
+    def __init__(self, proxy_model: str = "bert-base-uncased", hidden_layers: List[int] = [-1], stage: str = "train"):
+        self.tokenizer = None
+        self.model = None
         self.stage = stage
+        self.proxy_model = proxy_model
+        self.model_name = NAMING_MAP[proxy_model]
+        self.hidden_layers = hidden_layers
+        stats = []
         if stage == "train":
             self.stage += "_"
-
-        stats = []
-        for layer in self.hidden_layers:
-            if layer == -1:
-                layer_name = ""
-            else:
-                layer_name = f"_{layer}"
-            stats += [
-                f"{self.stage}proxy_token_embeddings{layer_name}",
-            ]
-            
-        super().__init__(
-            stats,
-            [f"{self.stage}proxy_embeddings_all"],
-        )
-
-    def __call__(
-        self,
-        dependencies: Dict[str, np.array],
-        texts: List[str],
-        model: WhiteboxModel,
-        max_new_tokens: int = 100,
-    ) -> Dict[str, np.ndarray]:
-        batch: Dict[str, torch.Tensor] = model.tokenize(texts)
-        batch = {k: v.to(model.device()) for k, v in batch.items()}
-        with torch.no_grad():
-            hidden_states = dependencies["proxy_embeddings_all"]
-            results = {}
             for layer in self.hidden_layers:
                 if layer == -1:
                     layer_name = ""
                 else:
                     layer_name = f"_{layer}"
-                token_embeddings = hidden_states[layer]
-                results[f"proxy_token_embeddings_decoder{layer_name}"] = (
-                    token_embeddings.cpu().detach().numpy().reshape(-1, token_embeddings.shape[-1])
+                stats += [
+                    f"{self.stage}proxy_{self.model_name}_token_embeddings{layer_name}",
+                    f"background_{self.stage}proxy_{self.model_name}_token_embeddings{layer_name}",
+                ]
+            
+            super().__init__(
+                stats,
+                [f"{self.stage}greedy_texts",
+                 f"background_{self.stage}greedy_texts"],
+            )
+
+        else:
+            for layer in self.hidden_layers:
+                if layer == -1:
+                    layer_name = ""
+                else:
+                    layer_name = f"_{layer}"
+                stats += [
+                    f"{self.stage}proxy_{self.model_name}_token_embeddings{layer_name}",
+                ]
+            
+            super().__init__(
+                stats,
+                [f"{self.stage}greedy_texts"]
+            )
+
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+    ) -> Dict[str, np.ndarray]:
+        full_texts = []
+        for input_text, text in zip(dependencies["input_texts"], dependencies["greedy_texts"]):
+            full_texts.append(input_text+text)
+        batch: Dict[str, torch.Tensor] = model.tokenize(full_texts)        
+        batch = {k: v.to(model.device()) for k, v in batch.items()}
+
+        if self.model is None:
+            self.tokenizer = AutoTokenizer.from_pretrained(self.proxy_model, truncation_side='left')
+            if self.model_name in ["bert_base", "bert_large", "electra_base", "roberta_base", "roberta_large"]:
+                if self.model_name in MODELS:
+                    self.model = MODELS[self.model_name]
+                else:
+                    self.model = AutoModel.from_pretrained(self.proxy_model).to("cuda")
+                    MODELS[self.model_name] = self.model
+            else:
+                if self.model_name in MODELS:
+                    self.model = MODELS[self.model_name]
+                else:
+                    self.model = AutoModel.from_pretrained(self.proxy_model, device_map="auto")
+                    MODELS[self.model_name] = self.model
+            
+        with torch.no_grad():
+            encoded_greedy = self.tokenizer(dependencies["greedy_texts"], return_tensors='pt', truncation=True)
+            encoded_input = self.tokenizer(full_texts, return_tensors='pt', truncation=True)
+            encoded_input = {k: v.to(self.model.device) for k, v in encoded_input.items()}
+            output = self.model(**encoded_input, output_hidden_states=True)
+
+        proxy_tokens = encoded_input["input_ids"].cpu().detach().numpy()[:, encoded_greedy["input_ids"].shape[1]:].tolist()
+        results = {}
+        for layer in self.hidden_layers:
+            if layer == -1:
+                layer_name = ""
+            else:
+                layer_name = f"_{layer}"
+                          
+            if self.model_name in ["bert_base", "bert_large", "electra_base", "roberta_base", "roberta_large"]:
+                token_embeddings = output.hidden_states[layer]
+                results[f"proxy_{self.model_name}_token_embeddings_decoder{layer_name}"] = (
+                    token_embeddings.cpu().detach().numpy().reshape(-1, token_embeddings.shape[-1])[-len(proxy_tokens[0]):]
                 )
+            else:
+                token_embeddings = torch.cat(output.hidden_states)[layer]
+                results[f"proxy_{self.model_name}_token_embeddings_decoder{layer_name}"] = (
+                    token_embeddings.cpu().detach().numpy().reshape(-1, token_embeddings.shape[-1])[-len(proxy_tokens[0])-1:-1]
+                )
+
+        results[f"proxy_{self.model_name}_tokens"] = proxy_tokens
         return results
 
 class InternalStatesCalculator(StatCalculator):
