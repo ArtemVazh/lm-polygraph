@@ -59,6 +59,8 @@ class Logger(Processor):
         print("Statistics:")
         print()
         for key, val in batch_stats.items():
+            if "embedding" in key:
+                continue
             str_repr = str(val)
             # to skip large outputs
             if len(str_repr) < 10000 and str_repr.count("\n") < 10:
