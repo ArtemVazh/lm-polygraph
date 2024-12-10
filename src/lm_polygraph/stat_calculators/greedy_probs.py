@@ -13,7 +13,7 @@ class BlackboxGreedyTextsCalculator(StatCalculator):
     """
 
     def __init__(self):
-        super().__init__(["greedy_texts", "train_greedy_texts", "train_target_texts"], [])
+        super().__init__(["greedy_texts", "train_greedy_texts", "train_target_texts", "background_train_greedy_texts", "background_train_target_texts"], [])
 
     def __call__(
         self,

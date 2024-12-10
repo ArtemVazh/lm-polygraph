@@ -429,13 +429,13 @@ class ProxyEmbeddingsCalculator(StatCalculator):
                     layer_name = f"_{layer}"
                 stats += [
                     f"{self.stage}proxy_{self.model_name}_token_embeddings{layer_name}",
-                    # f"background_{self.stage}proxy_{self.model_name}_token_embeddings{layer_name}",
+                    f"background_{self.stage}proxy_{self.model_name}_token_embeddings{layer_name}",
                 ]
             
             super().__init__(
                 stats,
                 [f"{self.stage}greedy_texts",
-                 # f"background_{self.stage}greedy_texts"
+                 f"background_{self.stage}greedy_texts"
                 ],
             )
 
