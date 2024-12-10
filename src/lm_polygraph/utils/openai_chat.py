@@ -1,11 +1,9 @@
 import openai
-import json
 import os
 import httpx
 import time
 import logging
-
-from filelock import FileLock
+import diskcache as dc
 
 
 log = logging.getLogger()
@@ -33,30 +31,19 @@ class OpenAIChat:
             openai.api_key = self.api_key
         self.openai_model = openai_model
 
-        self.cache_path = os.path.join(cache_path, "openai_chat_cache.json")
-        self.cache_lock = FileLock(self.cache_path + ".lock")
-        with self.cache_lock:
-            if not os.path.exists(self.cache_path):
-                if not os.path.exists(cache_path):
-                    os.makedirs(cache_path)
-                with open(self.cache_path, "w") as f:
-                    json.dump({}, f)
+        self.cache_path = os.path.join(cache_path, "openai_chat_cache.diskcache")
+        if not os.path.exists(cache_path):
+            os.makedirs(cache_path)
 
     def ask(self, message: str) -> str:
-        # check if the message is cached
-        while True:
-            # try to open file, repeat if occured an error due to the file is open by another process 
-            try:
-                with open(self.cache_path, "r") as f:
-                    openai_responses = json.load(f)
-                break
-            except Exception as e: 
-                log.info(f"Possibly cache file is opened; failed with exception: {e}. Retry after 3 seconds.")
-                time.sleep(2)
-                continue
+        cache_settings = dc.DEFAULT_SETTINGS.copy()
+        cache_settings["eviction_policy"] = "none"
+        cache_settings["size_limit"] = int(1e12)
+        cache_settings["cull_limit"] = 0
+        openai_responses = dc.Cache(self.cache_path, **cache_settings)
 
-        if message in openai_responses.get(self.openai_model, {}).keys():
-            reply = openai_responses[self.openai_model][message]
+        if (self.openai_model, message) in openai_responses:
+            reply = openai_responses[(self.openai_model, message)]
         else:
             # Ask openai
             if openai.api_key is None:
@@ -69,34 +56,11 @@ class OpenAIChat:
                 {"role": "user", "content": message},
             ]
             chat = self._send_request(messages)
-
             reply = chat.choices[0].message.content
 
-            # add reply to cache
-            with self.cache_lock:
-                while True:
-                    # try to open file, repeat if occured an error due to the file is open by another process 
-                    try:
-                        with open(self.cache_path, "r") as f:
-                            openai_responses = json.load(f)
-                        break
-                    except Exception as e: 
-                        log.info(f"Possibly cache file is opened; failed with exception: {e}. Retry after 3 seconds.")
-                        time.sleep(2)
-                        continue
-                if self.openai_model not in openai_responses.keys():
-                    openai_responses[self.openai_model] = {}
-                openai_responses[self.openai_model][message] = reply
-                while True:
-                    try:
-                        with open(self.cache_path, "w") as f:
-                            json.dump(openai_responses, f)
-                        break
-                    except Exception as e: 
-                        log.info(f"Possibly cache file is opened; failed with exception: {e}. Retry after 3 seconds.")
-                        time.sleep(2)
-                        continue
-
+            openai_responses[(self.openai_model, message)] = reply
+            openai_responses.close()
+            
         if "please provide" in reply.lower():
             return ""
         if "to assist you" in reply.lower():

@@ -39,7 +39,6 @@ class AlignScore(GenerationMetric):
         self,
         stats: Dict[str, np.ndarray],
         target_texts: List[str],
-        target_tokens: List[List[int]],
     ) -> np.ndarray:
         """
         Calculates AlignScore (https://aclanthology.org/2023.acl-long.634/) between
@@ -49,24 +48,26 @@ class AlignScore(GenerationMetric):
             stats (Dict[str, np.ndarray]): input statistics, which for multiple samples includes:
                 * model-generated texts in 'greedy_texts'
             target_texts (List[str]): ground-truth texts
-            target_tokens (List[List[int]]): corresponding token splits for each target text
         Returns:
             np.ndarray: list of AlignScore Scores for each sample in input.
         """
+        greedy_texts = stats["greedy_texts"]
+
+        filtered_targets = [x if len(x.strip()) else "(empty)" for x in target_texts]
+        filtered_outputs = [x if len(x.strip()) else "(empty)" for x in greedy_texts]
+
         if self.target_is_claims:
-            scores = np.array(
-                self.scorer.score(
-                    claims=target_texts,
-                    contexts=stats["greedy_texts"],
-                )
-            )
+            claims = filtered_targets
+            contexts = filtered_outputs
         else:
-            scores = np.array(
-                self.scorer.score(
-                    claims=[
-                        x if len(x.strip()) else "-" for x in stats["greedy_texts"]
-                    ],  # fix for zero length generation
-                    contexts=target_texts,
-                )
+            claims = filtered_outputs
+            contexts = filtered_targets
+
+        scores = np.array(
+            self.scorer.score(
+                claims=claims,
+                contexts=contexts,
             )
+        )
+
         return scores

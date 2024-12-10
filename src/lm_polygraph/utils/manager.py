@@ -170,7 +170,7 @@ def estimate_uncertainty(
     )
     man()
     ue = man.estimations[estimator.level, str(estimator)]
-    texts = man.stats.get("greedy_texts", man.stats.get("blackbox_greedy_texts", None))
+    texts = man.stats.get("greedy_texts", None)
     tokens = man.stats.get("greedy_tokens", None)
     if tokens is not None and len(tokens) > 0:
         # Remove last token, which is the end of the sequence token
@@ -290,7 +290,7 @@ class UEManager:
 
         self.stat_calculators_dict = stat_calculators_dict
 
-        self.model: WhiteboxModel = model
+        self.model: Model = model
         self.train_data: Dataset = train_data
         self.background_train_data: Dataset = background_train_data
         self.ensemble_model = ensemble_model
@@ -302,10 +302,9 @@ class UEManager:
         _check_unique_names(estimators)
         _check_unique_names(ue_metrics)
 
-        if isinstance(model, BlackboxModel):
-            greedy = ["blackbox_greedy_texts"]
-        else:
-            greedy = ["greedy_tokens", "greedy_texts"]
+        greedy = ["greedy_texts"]
+        if not isinstance(self.model, BlackboxModel):
+            greedy += ["greedy_tokens"]
 
         stats = (
             [s for e in self.estimators for s in e.stats_dependencies]
@@ -446,12 +445,9 @@ class UEManager:
             ]:
                 self.stats[key] += val
                 batch_stats[key] = val
+            batch_stats["model"] = self.model
 
-            if isinstance(self.model, WhiteboxModel):
-                target_tokens = self._tokenize_target_texts(target_texts)
-                self.stats["target_tokens"] += target_tokens
-                batch_stats["target_tokens"] = target_tokens
-                batch_stats["model"] = self.model
+            batch_stats["model"] = self.model
 
             train_stats_keys = list(train_stats.keys())
             for stat in train_stats_keys:
@@ -485,9 +481,7 @@ class UEManager:
 
             batch_gen_metrics: Dict[Tuple[str, str], List[float]] = defaultdict(list)
             for generation_metric in self.generation_metrics:
-                m = generation_metric(
-                    batch_stats, target_texts=target_texts, target_tokens=target_tokens
-                )
+                m = generation_metric(batch_stats, target_texts=target_texts)
                 if not isinstance(m, list):
                     m = m.tolist()
                 if generation_metric.level == "claim":
@@ -514,10 +508,9 @@ class UEManager:
                 for key, val in [
                     ("input_texts", inp_texts),
                     ("target_texts", target_texts),
+                    ("model", self.model),
                 ]:
                     batch_stats[key] = val
-
-                batch_stats["target_tokens"] = self._tokenize_target_texts(target_texts)
 
                 batch_stats["ensemble_generation_params"] = {}
                 batch_stats["ensemble_model"] = self.ensemble_model
@@ -678,13 +671,10 @@ class UEManager:
             max_new_tokens = self.max_new_tokens
         if len(stat_calculators) and (data is not None):
             for inp_texts, target_texts, max_new_tokens in tqdm(data):
-                target_tokens = self._tokenize_target_texts(target_texts)
-
                 batch_stats: Dict[str, np.ndarray] = {}
                 for key, val in [
                     ("input_texts", inp_texts),
                     ("target_texts", target_texts),
-                    ("target_tokens", target_tokens),
                 ]:
                     batch_stats[key] = val
 
@@ -726,23 +716,6 @@ class UEManager:
                     continue                  
             
         return result_train_stat
-
-    def _tokenize_target_texts(self, target_texts: List[str]) -> List[List[int]]:
-        if not len(target_texts):
-            print("Empty Target Texts:", target_texts)
-            return [self.model.tokenizer("")["input_ids"]]
-        
-        if isinstance(target_texts[0], list):
-            target_tokens = [
-                [self.model.tokenizer([text])["input_ids"][0] for text in target_text]
-                for target_text in target_texts
-            ]
-        else:
-            target_tokens = [
-                self.model.tokenizer([text])["input_ids"][0] for text in target_texts
-            ]
-
-        return target_tokens
 
     def save(self, save_path: str):
         """
