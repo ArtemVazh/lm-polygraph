@@ -480,33 +480,37 @@ class ProxyEmbeddingsCalculator(StatCalculator):
                 else:
                     self.model = AutoModel.from_pretrained(self.proxy_model, device_map="auto")
                     MODELS[self.model_name] = self.model
-            
+
         with torch.no_grad():
             encoded_greedy = self.tokenizer(dependencies["greedy_texts"], return_tensors='pt', truncation=True)
             encoded_input = self.tokenizer(full_texts, return_tensors='pt', truncation=True)
             encoded_input = {k: v.to(self.model.device) for k, v in encoded_input.items()}
             output = self.model(**encoded_input, output_hidden_states=True)
+        proxy_tokens = encoded_input["input_ids"].cpu().detach().numpy()[:, -encoded_greedy["input_ids"].shape[1]:].tolist()
 
-        proxy_tokens = encoded_input["input_ids"].cpu().detach().numpy()[:, encoded_greedy["input_ids"].shape[1]:].tolist()
         results = {}
+        embedding_size = output.hidden_states[0].shape[-1]
         for layer in self.hidden_layers:
             if layer == -1:
                 layer_name = ""
             else:
                 layer_name = f"_{layer}"
-                          
+
+            token_embeddings = output.hidden_states[layer].reshape(-1, embedding_size)
+            n_tokens = len(proxy_tokens[0])
+            token_embeddings = token_embeddings
             if self.model_name in ["bert_base", "bert_large", "electra_base", "roberta_base", "roberta_large"]:
-                token_embeddings = output.hidden_states[layer]
                 results[f"proxy_{self.model_name}_token_embeddings_decoder{layer_name}"] = (
-                    token_embeddings.cpu().detach().numpy().reshape(-1, token_embeddings.shape[-1])[-len(proxy_tokens[0]):]
+                    token_embeddings[-n_tokens:].cpu().detach().numpy()
                 )
             else:
-                token_embeddings = torch.cat(output.hidden_states)[layer]
                 results[f"proxy_{self.model_name}_token_embeddings_decoder{layer_name}"] = (
-                    token_embeddings.cpu().detach().numpy().reshape(-1, token_embeddings.shape[-1])[-len(proxy_tokens[0])-1:-1]
+                    token_embeddings[-n_tokens-1 : -1].cpu().detach().numpy()
                 )
 
+            del token_embeddings
         results[f"proxy_{self.model_name}_tokens"] = proxy_tokens
+        del output
         return results
 
 class InternalStatesCalculator(StatCalculator):

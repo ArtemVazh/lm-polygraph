@@ -696,10 +696,10 @@ class UEManager:
                         train_stats[stat].append(batch_stats[stat])
                     else:
                         train_stats[stat] = [batch_stats[stat]]
-
+                del batch_stats
                 torch.cuda.empty_cache()
                 gc.collect()
-
+            
             key_prefix = "background_train_" if background else "train_"
             keys = list(train_stats.keys())
             for stat in keys:
@@ -714,7 +714,6 @@ class UEManager:
                     print(e)
                     print("Continue")
                     continue                  
-            
         return result_train_stat
 
     def save(self, save_path: str):
