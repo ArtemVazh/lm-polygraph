@@ -66,9 +66,15 @@ class GreedyProbsCalculator(StatCalculator):
                 # "embeddings",
                 # "token_embeddings",
                 "embeddings_all",
+<<<<<<< HEAD
                 # "attention_features",
                 # "attention_weights",
                 # "train_embeddings_all",
+=======
+                "attention_features",
+                "attention_weights",
+                "train_embeddings_all",
+>>>>>>> c841bb1 (added attn)
                 "train_attention_features",
                 # "train_greedy_texts",
                 # "train_greedy_tokens",
@@ -171,8 +177,9 @@ class GreedyProbsCalculator(StatCalculator):
                     key=lambda x: x[0] == cut_sequences[-1][j],
                     reverse=True,
                 )
-        # attn_features = []
-        # attention_all = []
+                
+        attn_features = []
+        attention_all = []
         # attn_features_max = []
         # attn_features_max_tokens = []
         # attn_features_max_values = []
@@ -221,7 +228,7 @@ class GreedyProbsCalculator(StatCalculator):
 
         # attn_features_max_values.append(attn_features_max_values_s)
         # attn_features_max_tokens.append(attention_max_features_token_s)
-        # attention_all = np.array(attention_all)
+        attention_all = np.array(attention_all)
 
         # attn_features = np.array(attn_features)
 
@@ -264,8 +271,8 @@ class GreedyProbsCalculator(StatCalculator):
             "greedy_tokens_alternatives": cut_alternatives,
             "greedy_texts": cut_texts,
             "greedy_log_likelihoods": ll,
-            # "attention_features": attn_features,
-            # "attention_weights": attention_all,
+            "attention_features": attn_features,
+            "attention_weights": attention_all,
             # "attention_max_features": attn_features_max,
             # "attention_max_features_token": attn_features_max_tokens,
             # "attention_max_features_values": attn_features_max_values,
