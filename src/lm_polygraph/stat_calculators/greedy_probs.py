@@ -66,21 +66,17 @@ class GreedyProbsCalculator(StatCalculator):
                 # "embeddings",
                 # "token_embeddings",
                 "embeddings_all",
-<<<<<<< HEAD
-                # "attention_features",
-                # "attention_weights",
-                # "train_embeddings_all",
-=======
                 "attention_features",
                 "attention_weights",
+                "lookback_ratios",
                 "train_embeddings_all",
->>>>>>> c841bb1 (added attn)
                 "train_attention_features",
                 # "train_greedy_texts",
                 # "train_greedy_tokens",
                 "train_target_texts",
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
+                "train_lookback_ratios",
                 # "train_attention_max_features",
                 # "train_attention_max_features_values",
                 # "train_attention_max_features_token",
@@ -179,33 +175,47 @@ class GreedyProbsCalculator(StatCalculator):
                 )
                 
         attn_features = []
-        attention_all = []
+        attention_weights = []
+        lookback_ratios = []
         # attn_features_max = []
         # attn_features_max_tokens = []
         # attn_features_max_values = []
         # attn = []
-        # for i in range(len(texts)):
-        #     c = len(cut_sequences[i])
-        #     attn_mask = np.zeros(
-        #         shape=(
-        #             model.model.config.num_attention_heads
-        #             * model.model.config.num_hidden_layers,
-        #             c,
-        #             c,
-        #         )
-        #     )
-        #     for j in range(1, c):
-        #         attn_mask[:, j, :j] = (
-        #             torch.vstack(
-        #                 [
-        #                     attentions[j][layer][0][head][0][-j:]
-        #                     for layer in range(len(attentions[j]))
-        #                     for head in range(len(attentions[j][layer][0]))
-        #                 ]
-        #             )
-        #             .cpu()
-        #             .numpy()
-        #         )
+        for i in range(len(texts)):
+            c = len(cut_sequences[i])
+            attn_mask = np.zeros(
+                shape=(
+                    model.model.config.num_attention_heads
+                    * model.model.config.num_hidden_layers,
+                    c,
+                    c,
+                )
+            )
+            for j in range(1, c):
+                attn_mask[:, j, :j] = (
+                    torch.vstack(
+                        [
+                            attentions[j][layer][0][head][0][-j:]
+                            for layer in range(len(attentions[j]))
+                            for head in range(len(attentions[j][layer][0]))
+                        ]
+                    )
+                    .cpu()
+                    .numpy()
+                )
+            for j in range(c):
+                lookback_ratios_token = []
+                for layer in range(len(attentions[j])):
+                    for head in range(len(attentions[j][layer][0])):
+                        if j == 0:
+                            attention_on_new = 0
+                            attention_on_context = attentions[j][layer][0][head][0].mean().item()
+                        else:
+                            attention_on_new = attentions[j][layer][0][head][0][-j:].mean().item()
+                            attention_on_context = attentions[j][layer][0][head][0][:-j].mean().item()
+                        lookback_ratio = attention_on_context / (attention_on_new + attention_on_context)
+                        lookback_ratios_token.append(lookback_ratio)
+                lookback_ratios.append(lookback_ratios_token)
 
             # attn.append(attn_mask.transpose(1,2,0))
             # top_n = min(3, attn_mask.max(0).shape[1])
@@ -213,9 +223,9 @@ class GreedyProbsCalculator(StatCalculator):
             # attn_features_max_values_s = []
             # attention_max_features_token_s = []
 
-            # attention_all.append(attn_mask.max(0))
-            # for j in range(1, c):
-            #     attn_features.append(attn_mask[:, j, j - 1])
+            attention_weights.append(attn_mask.max(0))
+            for j in range(1, c):
+                attn_features.append(attn_mask[:, j, j - 1])
                 # attn_features_max_values_i = []
                 # attention_max_features_token_i = []
                 # for k in range(top_n):
@@ -228,9 +238,9 @@ class GreedyProbsCalculator(StatCalculator):
 
         # attn_features_max_values.append(attn_features_max_values_s)
         # attn_features_max_tokens.append(attention_max_features_token_s)
-        attention_all = np.array(attention_all)
-
-        # attn_features = np.array(attn_features)
+        attention_weights = np.array(attention_weights)
+        attn_features = np.array(attn_features)
+        lookback_ratios = np.array(lookback_ratios)
 
         ll = []
         for i in range(len(texts)):
@@ -272,7 +282,8 @@ class GreedyProbsCalculator(StatCalculator):
             "greedy_texts": cut_texts,
             "greedy_log_likelihoods": ll,
             "attention_features": attn_features,
-            "attention_weights": attention_all,
+            "attention_weights": attention_weights,
+            "lookback_ratios": lookback_ratios,
             # "attention_max_features": attn_features_max,
             # "attention_max_features_token": attn_features_max_tokens,
             # "attention_max_features_values": attn_features_max_values,
