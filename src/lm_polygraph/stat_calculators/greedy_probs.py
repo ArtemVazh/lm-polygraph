@@ -69,6 +69,8 @@ class GreedyProbsCalculator(StatCalculator):
                 "attention_features",
                 "attention_weights",
                 "lookback_ratios",
+                "attention_all",
+                
                 "train_embeddings_all",
                 "train_attention_features",
                 # "train_greedy_texts",
@@ -77,6 +79,8 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
                 "train_lookback_ratios",
+                "train_attention_all",
+                "train_attention_weights"
                 # "train_attention_max_features",
                 # "train_attention_max_features_values",
                 # "train_attention_max_features_token",
@@ -177,6 +181,7 @@ class GreedyProbsCalculator(StatCalculator):
         attn_features = []
         attention_weights = []
         lookback_ratios = []
+        attention_all = []
         # attn_features_max = []
         # attn_features_max_tokens = []
         # attn_features_max_values = []
@@ -225,7 +230,10 @@ class GreedyProbsCalculator(StatCalculator):
 
             attention_weights.append(attn_mask.max(0))
             for j in range(1, c):
+                attention_all.append([])
                 attn_features.append(attn_mask[:, j, j - 1])
+                for k in range(j):
+                    attention_all[-1].append(attn_mask[:, j, k])
                 # attn_features_max_values_i = []
                 # attention_max_features_token_i = []
                 # for k in range(top_n):
@@ -284,6 +292,7 @@ class GreedyProbsCalculator(StatCalculator):
             "attention_features": attn_features,
             "attention_weights": attention_weights,
             "lookback_ratios": lookback_ratios,
+            "attention_all": attention_all,
             # "attention_max_features": attn_features_max,
             # "attention_max_features_token": attn_features_max_tokens,
             # "attention_max_features_values": attn_features_max_values,
