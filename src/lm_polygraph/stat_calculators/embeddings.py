@@ -190,7 +190,7 @@ def aggregate(x, aggregation_method, axis):
 
 class AllEmbeddingsCalculator(StatCalculator):
     def __init__(self):
-        super().__init__(["train_embeddings_all", "train_greedy_texts", "background_train_greedy_texts"], [])
+        super().__init__(["train_embeddings_all", "train_greedy_texts", "train_greedy_tokens", "background_train_greedy_texts"], [])
 
     def __call__(
         self,
