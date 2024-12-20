@@ -73,8 +73,8 @@ class GreedyProbsCalculator(StatCalculator):
                 
                 # "train_embeddings_all",
                 "train_attention_features",
-                # "train_greedy_texts",
-                # "train_greedy_tokens",
+                "train_greedy_texts",
+                "train_greedy_tokens",
                 "train_target_texts",
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
