@@ -71,7 +71,7 @@ class GreedyProbsCalculator(StatCalculator):
                 "lookback_ratios",
                 "attention_all",
                 
-                "train_embeddings_all",
+                # "train_embeddings_all",
                 "train_attention_features",
                 # "train_greedy_texts",
                 # "train_greedy_tokens",
@@ -128,7 +128,7 @@ class GreedyProbsCalculator(StatCalculator):
                 return_dict_in_generate=True,
                 max_new_tokens=max_new_tokens,
                 min_new_tokens=2,
-                output_attentions=False,
+                output_attentions=True,
                 output_hidden_states=True,
                 num_return_sequences=1,
                 suppress_tokens=(
@@ -143,7 +143,7 @@ class GreedyProbsCalculator(StatCalculator):
             )
             logits = torch.stack(out.scores, dim=1)
             
-            # attentions = out.attentions
+            attentions = out.attentions
             sequences = out.sequences
 
         cut_logits = []
