@@ -53,7 +53,7 @@ class GreedyProbsCalculator(StatCalculator):
     * embeddings from the model
     """
 
-    def __init__(self, n_alternatives: int = 10):
+    def __init__(self, n_alternatives: int = 10, n_top_attention: int = 10):
         super().__init__(
             [
                 "input_tokens",
@@ -63,15 +63,12 @@ class GreedyProbsCalculator(StatCalculator):
                 "greedy_texts",
                 "greedy_log_likelihoods",
                 "train_greedy_log_likelihoods",
-                # "embeddings",
-                # "token_embeddings",
+
                 "embeddings_all",
                 "attention_features",
                 "attention_weights",
                 "lookback_ratios",
-                "attention_all",
-                
-                # "train_embeddings_all",
+                                
                 "train_attention_features",
                 "train_greedy_texts",
                 "train_greedy_tokens",
@@ -79,20 +76,17 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
                 "train_lookback_ratios",
-                "train_attention_all",
-                "train_attention_weights"
-                # "train_attention_max_features",
-                # "train_attention_max_features_values",
-                # "train_attention_max_features_token",
-                # "train_attention_all"
-                # "attention_all",
-                # "attention_max_features",
-                # "attention_max_features_values",
-                # "attention_max_features_token",
+                
+                "train_attention_max_features_values",
+                "train_attention_max_features_token",
+
+                "attention_max_features_values",
+                "attention_max_features_token",
             ],
             [],
         )
         self.n_alternatives = n_alternatives
+        self.n_top_attention = n_top_attention
 
     def __call__(
         self,
@@ -181,11 +175,9 @@ class GreedyProbsCalculator(StatCalculator):
         attn_features = []
         attention_weights = []
         lookback_ratios = []
-        attention_all = []
-        # attn_features_max = []
-        # attn_features_max_tokens = []
-        # attn_features_max_values = []
-        # attn = []
+        attn_features_max_tokens = []
+        attn_features_max_values = []
+        
         for i in range(len(texts)):
             c = len(cut_sequences[i])
             attn_mask = np.zeros(
@@ -222,30 +214,27 @@ class GreedyProbsCalculator(StatCalculator):
                         lookback_ratios_token.append(lookback_ratio)
                 lookback_ratios.append(lookback_ratios_token)
 
-            # attn.append(attn_mask.transpose(1,2,0))
-            # top_n = min(3, attn_mask.max(0).shape[1])
-            # topk = torch.topk(torch.tensor(attn_mask.max(0)), k=top_n, dim=1)
-            # attn_features_max_values_s = []
-            # attention_max_features_token_s = []
+            max_attention = attn_mask.max(0)
+            current_top_n = min(self.n_top_attention, max_attention.shape[1])
+            topk = torch.topk(torch.tensor(max_attention), k=current_top_n, dim=1)
+            attn_features_max_values_s = []
+            attn_features_max_tokens_s = []
 
-            attention_weights.append(attn_mask.max(0))
+            attention_weights.append(max_attention)
             for j in range(1, c):
-                attention_all.append([])
                 attn_features.append(attn_mask[:, j, j - 1])
-                for k in range(j):
-                    attention_all[-1].append(attn_mask[:, j, k])
-                # attn_features_max_values_i = []
-                # attention_max_features_token_i = []
-                # for k in range(top_n):
-                #     attn_features_max.append(attn_mask[:, j, topk.indices[j][k].item()])
-                #     attn_features_max_values_i.append(topk.values[j][k].item())
-                #     attention_max_features_token_i.append(topk.indices[j][k].item())
+                attn_features_max_values_i = []
+                attn_features_max_tokens_i = []
+                for k in range(min(j, current_top_n)):
+                    attn_features_max_values_i.append(attn_mask[:, j, topk.indices[j][k].item()])                    
+                    attn_features_max_tokens_i.append(topk.indices[j][k].item())
 
-                # attn_features_max_values_s.append(attn_features_max_values_i)
-                # attention_max_features_token_s.append(attention_max_features_token_i)
+                attn_features_max_values_s.append(attn_features_max_values_i)
+                attn_features_max_tokens_s.append(attn_features_max_tokens_i)
 
-        # attn_features_max_values.append(attn_features_max_values_s)
-        # attn_features_max_tokens.append(attention_max_features_token_s)
+        attn_features_max_values.append(attn_features_max_values_s)
+        attn_features_max_tokens.append(attn_features_max_tokens_s)
+        
         attention_weights = np.array(attention_weights)
         attn_features = np.array(attn_features)
         lookback_ratios = np.array(lookback_ratios)
@@ -269,19 +258,6 @@ class GreedyProbsCalculator(StatCalculator):
         else:
             raise NotImplementedError
 
-        # if model.model_type == "CausalLM":
-        #     embeddings_dict = {
-        #         "embeddings_decoder": embeddings_decoder,
-        #         "token_embeddings_decoder": token_embeddings_decoder,
-        #     }
-        # elif model.model_type == "Seq2SeqLM":
-        #     embeddings_dict = {
-        #         "embeddings_encoder": embeddings_encoder,
-        #         "embeddings_decoder": embeddings_decoder,
-        #     }
-        # else:
-        #     raise NotImplementedError
-
         result_dict = {
             "input_tokens": batch["input_ids"].to("cpu").tolist(),
             "greedy_log_probs": cut_logits,
@@ -292,11 +268,8 @@ class GreedyProbsCalculator(StatCalculator):
             "attention_features": attn_features,
             "attention_weights": attention_weights,
             "lookback_ratios": lookback_ratios,
-            "attention_all": attention_all,
-            # "attention_max_features": attn_features_max,
-            # "attention_max_features_token": attn_features_max_tokens,
-            # "attention_max_features_values": attn_features_max_values,
-            # "attention_all": attn
+            "attention_max_features_token": attn_features_max_tokens,
+            "attention_max_features_values": attn_features_max_values,
         }
         result_dict.update(embeddings_dict)
 
