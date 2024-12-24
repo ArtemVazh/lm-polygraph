@@ -692,6 +692,8 @@ class UEManager:
                 for stat in batch_stats.keys():
                     if "embeddings_all" in stat:
                         continue
+                    if "attentions_all" in stat:
+                        continue
                     if stat in train_stats.keys():
                         train_stats[stat].append(batch_stats[stat])
                     else:

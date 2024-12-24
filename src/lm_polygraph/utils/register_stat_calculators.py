@@ -115,6 +115,9 @@ def register_stat_calculators(
             )
         )
 
+
+        _register(AttentionCalculator())
+
         _register(AllEmbeddingsCalculator())
         _register(SourceEmbeddingsCalculator())
         # _register(SamplingGenerationEmbeddingsCalculator())

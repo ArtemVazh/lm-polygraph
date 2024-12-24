@@ -62,26 +62,16 @@ class GreedyProbsCalculator(StatCalculator):
                 "greedy_tokens_alternatives",
                 "greedy_texts",
                 "greedy_log_likelihoods",
-                "train_greedy_log_likelihoods",
-
+                
                 "embeddings_all",
-                "attention_features",
-                "attention_weights",
-                "lookback_ratios",
-                                
-                "train_attention_features",
+                "attentions_all",
+
+                "train_greedy_log_likelihoods",
                 "train_greedy_texts",
                 "train_greedy_tokens",
                 "train_target_texts",
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
-                "train_lookback_ratios",
-                
-                "train_attention_max_features_values",
-                "train_attention_max_features_token",
-
-                "attention_max_features_values",
-                "attention_max_features_token",
             ],
             [],
         )
@@ -172,73 +162,6 @@ class GreedyProbsCalculator(StatCalculator):
                     reverse=True,
                 )
                 
-        attn_features = []
-        attention_weights = []
-        lookback_ratios = []
-        attn_features_max_tokens = []
-        attn_features_max_values = []
-        
-        for i in range(len(texts)):
-            c = len(cut_sequences[i])
-            attn_mask = np.zeros(
-                shape=(
-                    model.model.config.num_attention_heads
-                    * model.model.config.num_hidden_layers,
-                    c,
-                    c,
-                )
-            )
-            for j in range(1, c):
-                attn_mask[:, j, :j] = (
-                    torch.vstack(
-                        [
-                            attentions[j][layer][0][head][0][-j:]
-                            for layer in range(len(attentions[j]))
-                            for head in range(len(attentions[j][layer][0]))
-                        ]
-                    )
-                    .cpu()
-                    .numpy()
-                )
-            for j in range(c):
-                lookback_ratios_token = []
-                for layer in range(len(attentions[j])):
-                    for head in range(len(attentions[j][layer][0])):
-                        if j == 0:
-                            attention_on_new = 0
-                            attention_on_context = attentions[j][layer][0][head][0].mean().item()
-                        else:
-                            attention_on_new = attentions[j][layer][0][head][0][-j:].mean().item()
-                            attention_on_context = attentions[j][layer][0][head][0][:-j].mean().item()
-                        lookback_ratio = attention_on_context / (attention_on_new + attention_on_context)
-                        lookback_ratios_token.append(lookback_ratio)
-                lookback_ratios.append(lookback_ratios_token)
-
-            max_attention = attn_mask.max(0)
-            current_top_n = min(self.n_top_attention, max_attention.shape[1])
-            topk = torch.topk(torch.tensor(max_attention), k=current_top_n, dim=1)
-            attn_features_max_values_s = []
-            attn_features_max_tokens_s = []
-
-            attention_weights.append(max_attention)
-            for j in range(1, c):
-                attn_features.append(attn_mask[:, j, j - 1])
-                attn_features_max_values_i = []
-                attn_features_max_tokens_i = []
-                for k in range(min(j, current_top_n)):
-                    attn_features_max_values_i.append(attn_mask[:, j, topk.indices[j][k].item()])                    
-                    attn_features_max_tokens_i.append(topk.indices[j][k].item())
-
-                attn_features_max_values_s.append(attn_features_max_values_i)
-                attn_features_max_tokens_s.append(attn_features_max_tokens_i)
-
-        attn_features_max_values.append(attn_features_max_values_s)
-        attn_features_max_tokens.append(attn_features_max_tokens_s)
-        
-        attention_weights = np.array(attention_weights)
-        attn_features = np.array(attn_features)
-        lookback_ratios = np.array(lookback_ratios)
-
         ll = []
         for i in range(len(texts)):
             log_probs = cut_logits[i]
@@ -265,11 +188,7 @@ class GreedyProbsCalculator(StatCalculator):
             "greedy_tokens_alternatives": cut_alternatives,
             "greedy_texts": cut_texts,
             "greedy_log_likelihoods": ll,
-            "attention_features": attn_features,
-            "attention_weights": attention_weights,
-            "lookback_ratios": lookback_ratios,
-            "attention_max_features_token": attn_features_max_tokens,
-            "attention_max_features_values": attn_features_max_values,
+            "attentions_all": attentions,
         }
         result_dict.update(embeddings_dict)
 
