@@ -294,7 +294,6 @@ class EmbeddingsCalculator(StatCalculator):
                 ]
         if stage == "train":    
             deps += [f"background_{self.stage}embeddings_all"]
-        print(stats, deps)
         super().__init__(
             stats,
             deps,
