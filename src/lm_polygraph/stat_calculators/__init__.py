@@ -24,7 +24,7 @@ from .bart_score import BartScoreCalculator
 from .model_score import ModelScoreCalculator
 from .embeddings import (
     EmbeddingsCalculator,
-    AllEmbeddingsCalculator,
+    # AllEmbeddingsCalculator,
     SourceEmbeddingsCalculator,
     InternalStatesCalculator,
     TokenInternalStatesCalculator,

@@ -64,6 +64,8 @@ class GreedyProbsCalculator(StatCalculator):
                 "greedy_log_likelihoods",
                 
                 "embeddings_all",
+                "train_embeddings_all",
+                "background_train_greedy_texts",
                 "attentions_all",
 
                 "train_greedy_log_likelihoods",

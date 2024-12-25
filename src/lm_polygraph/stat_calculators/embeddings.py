@@ -188,76 +188,76 @@ def aggregate(x, aggregation_method, axis):
         return x.sum(axis=axis)
 
 
-class AllEmbeddingsCalculator(StatCalculator):
-    def __init__(self):
-        super().__init__(["train_embeddings_all", 
-                        #   "train_greedy_texts", 
-                        #   "train_greedy_tokens", 
-                          "background_train_greedy_texts"], [])
+# class AllEmbeddingsCalculator(StatCalculator):
+#     def __init__(self):
+#         super().__init__(["train_embeddings_all", 
+#                         #   "train_greedy_texts", 
+#                         #   "train_greedy_tokens", 
+#                           "background_train_greedy_texts"], [])
 
-    def __call__(
-        self,
-        dependencies: Dict[str, np.array],
-        texts: List[str],
-        model: WhiteboxModel,
-        max_new_tokens: int = 100,
-    ) -> Dict[str, np.ndarray]:
-        batch: Dict[str, torch.Tensor] = model.tokenize(texts)
-        batch = {k: v.to(model.device()) for k, v in batch.items()}
-        with torch.no_grad():
-            out = model.generate(
-                **batch,
-                output_scores=True,
-                return_dict_in_generate=True,
-                max_new_tokens=max_new_tokens,
-                min_new_tokens=2,
-                output_attentions=False,
-                output_hidden_states=True,
-                num_beams=1,
-                num_return_sequences=1,
-                suppress_tokens=(
-                    []
-                    if model.generation_parameters.allow_newlines
-                    else [
-                        t
-                        for t in range(len(model.tokenizer))
-                        if "\n" in model.tokenizer.decode([t])
-                    ]
-                ),
-            )
+#     def __call__(
+#         self,
+#         dependencies: Dict[str, np.array],
+#         texts: List[str],
+#         model: WhiteboxModel,
+#         max_new_tokens: int = 100,
+#     ) -> Dict[str, np.ndarray]:
+#         batch: Dict[str, torch.Tensor] = model.tokenize(texts)
+#         batch = {k: v.to(model.device()) for k, v in batch.items()}
+#         with torch.no_grad():
+#             out = model.generate(
+#                 **batch,
+#                 output_scores=True,
+#                 return_dict_in_generate=True,
+#                 max_new_tokens=max_new_tokens,
+#                 min_new_tokens=2,
+#                 output_attentions=False,
+#                 output_hidden_states=True,
+#                 num_beams=1,
+#                 num_return_sequences=1,
+#                 suppress_tokens=(
+#                     []
+#                     if model.generation_parameters.allow_newlines
+#                     else [
+#                         t
+#                         for t in range(len(model.tokenizer))
+#                         if "\n" in model.tokenizer.decode([t])
+#                     ]
+#                 ),
+#             )
             
-            sequences = out.sequences
+#             sequences = out.sequences
 
-        cut_sequences = []
-        cut_texts = []
-        for i in range(len(texts)):
-            if model.model_type == "CausalLM":
-                idx = batch["input_ids"].shape[1]
-                seq = sequences[i, idx:].cpu()
-            else:
-                seq = sequences[i, 1:].cpu()
-            length, text_length = len(seq), len(seq)
-            for j in range(len(seq)):
-                if seq[j] == model.tokenizer.eos_token_id:
-                    length = j + 1
-                    text_length = j
-                    break
-            cut_sequences.append(seq[:length].tolist())
-            cut_texts.append(model.tokenizer.decode(seq[:text_length]))
+#         cut_sequences = []
+#         cut_texts = []
+#         for i in range(len(texts)):
+#             if model.model_type == "CausalLM":
+#                 idx = batch["input_ids"].shape[1]
+#                 seq = sequences[i, idx:].cpu()
+#             else:
+#                 seq = sequences[i, 1:].cpu()
+#             length, text_length = len(seq), len(seq)
+#             for j in range(len(seq)):
+#                 if seq[j] == model.tokenizer.eos_token_id:
+#                     length = j + 1
+#                     text_length = j
+#                     break
+#             cut_sequences.append(seq[:length].tolist())
+#             cut_texts.append(model.tokenizer.decode(seq[:text_length]))
 
-        if model.model_type == "CausalLM":
-            return {
-                "embeddings_all_decoder": out.hidden_states,
-                "greedy_tokens": cut_sequences,
-                "greedy_texts": cut_texts,
-            }
-        elif model.model_type == "Seq2SeqLM":
-            return {
-                "embeddings_all_encoder": out.encoder_hidden_states,
-                "embeddings_all_decoder": out.decoder_hidden_states,
-            }
-        else:
-            raise NotImplementedError
+#         if model.model_type == "CausalLM":
+#             return {
+#                 "embeddings_all_decoder": out.hidden_states,
+#                 "greedy_tokens": cut_sequences,
+#                 "greedy_texts": cut_texts,
+#             }
+#         elif model.model_type == "Seq2SeqLM":
+#             return {
+#                 "embeddings_all_encoder": out.encoder_hidden_states,
+#                 "embeddings_all_decoder": out.decoder_hidden_states,
+#             }
+#         else:
+#             raise NotImplementedError
 
 
 class OutputWrapper:
