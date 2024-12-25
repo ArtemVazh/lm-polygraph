@@ -274,6 +274,7 @@ class EmbeddingsCalculator(StatCalculator):
             self.stage += "_"
 
         stats = []
+        deps = [f"{self.stage}embeddings_all"]
         for layer in self.hidden_layers:
             if layer == -1:
                 layer_name = ""
@@ -291,9 +292,12 @@ class EmbeddingsCalculator(StatCalculator):
                     f"{self.stage}embeddings{layer_name}",
                     f"{self.stage}token_embeddings{layer_name}",
                 ]
+        if stage == "train":    
+            deps += [f"background_{self.stage}embeddings_all"]
+        print(stats, deps)
         super().__init__(
             stats,
-            [f"{self.stage}embeddings_all"],
+            deps,
         )
 
     def __call__(
