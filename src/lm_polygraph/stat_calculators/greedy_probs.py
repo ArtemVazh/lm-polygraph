@@ -53,7 +53,7 @@ class GreedyProbsCalculator(StatCalculator):
     * embeddings from the model
     """
 
-    def __init__(self, n_alternatives: int = 10):
+    def __init__(self, n_alternatives: int = 10, n_top_attention: int = 10):
         super().__init__(
             [
                 "input_tokens",
@@ -62,31 +62,21 @@ class GreedyProbsCalculator(StatCalculator):
                 "greedy_tokens_alternatives",
                 "greedy_texts",
                 "greedy_log_likelihoods",
-                "train_greedy_log_likelihoods",
-                # "embeddings",
-                # "token_embeddings",
+                
                 "embeddings_all",
-                # "attention_features",
-                # "attention_weights",
-                # "train_embeddings_all",
-                "train_attention_features",
-                # "train_greedy_texts",
-                # "train_greedy_tokens",
+                "attentions_all",
+
+                "train_greedy_log_likelihoods",
+                "train_greedy_texts",
+                "train_greedy_tokens",
                 "train_target_texts",
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
-                # "train_attention_max_features",
-                # "train_attention_max_features_values",
-                # "train_attention_max_features_token",
-                # "train_attention_all"
-                # "attention_all",
-                # "attention_max_features",
-                # "attention_max_features_values",
-                # "attention_max_features_token",
             ],
             [],
         )
         self.n_alternatives = n_alternatives
+        self.n_top_attention = n_top_attention
 
     def __call__(
         self,
@@ -122,7 +112,7 @@ class GreedyProbsCalculator(StatCalculator):
                 return_dict_in_generate=True,
                 max_new_tokens=max_new_tokens,
                 min_new_tokens=2,
-                output_attentions=False,
+                output_attentions=True,
                 output_hidden_states=True,
                 num_return_sequences=1,
                 suppress_tokens=(
@@ -137,7 +127,7 @@ class GreedyProbsCalculator(StatCalculator):
             )
             logits = torch.stack(out.scores, dim=1)
             
-            # attentions = out.attentions
+            attentions = out.attentions
             sequences = out.sequences
 
         cut_logits = []
@@ -171,60 +161,7 @@ class GreedyProbsCalculator(StatCalculator):
                     key=lambda x: x[0] == cut_sequences[-1][j],
                     reverse=True,
                 )
-        # attn_features = []
-        # attention_all = []
-        # attn_features_max = []
-        # attn_features_max_tokens = []
-        # attn_features_max_values = []
-        # attn = []
-        # for i in range(len(texts)):
-        #     c = len(cut_sequences[i])
-        #     attn_mask = np.zeros(
-        #         shape=(
-        #             model.model.config.num_attention_heads
-        #             * model.model.config.num_hidden_layers,
-        #             c,
-        #             c,
-        #         )
-        #     )
-        #     for j in range(1, c):
-        #         attn_mask[:, j, :j] = (
-        #             torch.vstack(
-        #                 [
-        #                     attentions[j][layer][0][head][0][-j:]
-        #                     for layer in range(len(attentions[j]))
-        #                     for head in range(len(attentions[j][layer][0]))
-        #                 ]
-        #             )
-        #             .cpu()
-        #             .numpy()
-        #         )
-
-            # attn.append(attn_mask.transpose(1,2,0))
-            # top_n = min(3, attn_mask.max(0).shape[1])
-            # topk = torch.topk(torch.tensor(attn_mask.max(0)), k=top_n, dim=1)
-            # attn_features_max_values_s = []
-            # attention_max_features_token_s = []
-
-            # attention_all.append(attn_mask.max(0))
-            # for j in range(1, c):
-            #     attn_features.append(attn_mask[:, j, j - 1])
-                # attn_features_max_values_i = []
-                # attention_max_features_token_i = []
-                # for k in range(top_n):
-                #     attn_features_max.append(attn_mask[:, j, topk.indices[j][k].item()])
-                #     attn_features_max_values_i.append(topk.values[j][k].item())
-                #     attention_max_features_token_i.append(topk.indices[j][k].item())
-
-                # attn_features_max_values_s.append(attn_features_max_values_i)
-                # attention_max_features_token_s.append(attention_max_features_token_i)
-
-        # attn_features_max_values.append(attn_features_max_values_s)
-        # attn_features_max_tokens.append(attention_max_features_token_s)
-        # attention_all = np.array(attention_all)
-
-        # attn_features = np.array(attn_features)
-
+                
         ll = []
         for i in range(len(texts)):
             log_probs = cut_logits[i]
@@ -244,19 +181,6 @@ class GreedyProbsCalculator(StatCalculator):
         else:
             raise NotImplementedError
 
-        # if model.model_type == "CausalLM":
-        #     embeddings_dict = {
-        #         "embeddings_decoder": embeddings_decoder,
-        #         "token_embeddings_decoder": token_embeddings_decoder,
-        #     }
-        # elif model.model_type == "Seq2SeqLM":
-        #     embeddings_dict = {
-        #         "embeddings_encoder": embeddings_encoder,
-        #         "embeddings_decoder": embeddings_decoder,
-        #     }
-        # else:
-        #     raise NotImplementedError
-
         result_dict = {
             "input_tokens": batch["input_ids"].to("cpu").tolist(),
             "greedy_log_probs": cut_logits,
@@ -264,12 +188,7 @@ class GreedyProbsCalculator(StatCalculator):
             "greedy_tokens_alternatives": cut_alternatives,
             "greedy_texts": cut_texts,
             "greedy_log_likelihoods": ll,
-            # "attention_features": attn_features,
-            # "attention_weights": attention_all,
-            # "attention_max_features": attn_features_max,
-            # "attention_max_features_token": attn_features_max_tokens,
-            # "attention_max_features_values": attn_features_max_values,
-            # "attention_all": attn
+            "attentions_all": attentions,
         }
         result_dict.update(embeddings_dict)
 

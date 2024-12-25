@@ -30,6 +30,7 @@ from .embeddings import (
     TokenInternalStatesCalculator,
     ProxyEmbeddingsCalculator
 )
+from .attention import AttentionCalculator
 from .ensemble_token_data import EnsembleTokenLevelDataCalculator
 from .semantic_matrix import SemanticMatrixCalculator
 from .cross_encoder_similarity import CrossEncoderSimilarityMatrixCalculator

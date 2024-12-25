@@ -18,11 +18,13 @@ class AlignScore(GenerationMetric):
         ckpt_path="https://huggingface.co/yzha/AlignScore/resolve/main/AlignScore-large.ckpt",
         batch_size=16,
         target_is_claims=True,
+        return_mean=False,
     ):
         super().__init__(["greedy_texts", "input_texts"], "sequence")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.target_is_claims = target_is_claims
         self.batch_size = batch_size
+        self.return_mean = return_mean
         self.scorer = AlignScorer(
             model="roberta-large",
             batch_size=batch_size,
@@ -33,7 +35,7 @@ class AlignScore(GenerationMetric):
         )
 
     def __str__(self):
-        return "AlignScore"
+        return f"AlignScore"
 
     def __call__(
         self,
@@ -69,5 +71,13 @@ class AlignScore(GenerationMetric):
                 contexts=contexts,
             )
         )
+        if self.return_mean:
+            scores += np.array(
+                self.scorer.score(
+                    claims=contexts,
+                    contexts=claims,
+                )
+            )
+            scores /= 2
 
         return scores
