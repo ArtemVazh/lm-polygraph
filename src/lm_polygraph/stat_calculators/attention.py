@@ -29,6 +29,9 @@ class AttentionCalculator(StatCalculator):
                 
                 "attention_max_features_token",
                 "train_attention_max_features_token",
+                
+                "attention_features_values",
+                "train_attention_features_values",
             ],
             ["attentions_all"],
         )
@@ -64,6 +67,7 @@ class AttentionCalculator(StatCalculator):
         lookback_ratios = []
         attn_features_max_tokens = []
         attn_features_max_values = []
+        attn_features_values = []
         
         for i in range(len(texts)):
             c = len(cut_sequences[i])
@@ -106,21 +110,26 @@ class AttentionCalculator(StatCalculator):
             topk = torch.topk(torch.tensor(max_attention), k=current_top_n, dim=1)
             attn_features_max_values_s = []
             attn_features_max_tokens_s = []
+            attn_features_values_s = []
 
             attention_weights.append(max_attention)
             for j in range(1, c):
                 attn_features.append(attn_mask[:, j, j - 1])
                 attn_features_max_values_i = []
                 attn_features_max_tokens_i = []
+                attn_features_values_i = []
                 for k in range(min(j, current_top_n)):
                     attn_features_max_values_i.append(attn_mask[:, j, topk.indices[j][k].item()])                    
                     attn_features_max_tokens_i.append(topk.indices[j][k].item())
+                    attn_features_values_i.append(attn_mask[:, j, j - k - 1]) 
 
                 attn_features_max_values_s.append(attn_features_max_values_i)
                 attn_features_max_tokens_s.append(attn_features_max_tokens_i)
+                attn_features_values_s.append(attn_features_values_i)
 
         attn_features_max_values.append(attn_features_max_values_s)
         attn_features_max_tokens.append(attn_features_max_tokens_s)
+        attn_features_values.append(attn_features_values_s)
         
         attention_weights = np.array(attention_weights)
         attn_features = np.array(attn_features)
@@ -133,6 +142,7 @@ class AttentionCalculator(StatCalculator):
             "attention_features": attn_features,
             "attention_max_features_token": attn_features_max_tokens,
             "attention_max_features_values": attn_features_max_values,
+            "attention_features_values": attn_features_values,
         }
 
         return result_dict
