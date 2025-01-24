@@ -68,7 +68,6 @@ class AttentionCalculator(StatCalculator):
         attn_features_max_tokens = []
         attn_features_max_values = []
         attn_features_values = []
-        
         for i in range(len(texts)):
             c = len(cut_sequences[i])
             attn_mask = np.zeros(
@@ -79,11 +78,18 @@ class AttentionCalculator(StatCalculator):
                     c,
                 )
             )
+            
             for j in range(1, c):
+                start_idx = -j
+                end_idx = attentions[j][0].shape[-1]
+                if attentions[0][0].shape[-1] == attentions[j][0].shape[-1]:
+                    # for gemma-2
+                    start_idx = attentions[0][0].shape[-2] # prompt len
+                    end_idx = start_idx + j
                 attn_mask[:, j, :j] = (
                     torch.vstack(
                         [
-                            attentions[j][layer][0][head][0][-j:]
+                            attentions[j][layer][0][head][0][start_idx:end_idx]
                             for layer in range(len(attentions[j]))
                             for head in range(len(attentions[j][layer][0]))
                         ]
@@ -93,14 +99,22 @@ class AttentionCalculator(StatCalculator):
                 )
             for j in range(c):
                 lookback_ratios_token = []
+                
+                start_idx = -j
+                end_idx = attentions[j][0].shape[-1]
+                if attentions[0][0].shape[-1] == attentions[j][0].shape[-1]:
+                    # for gemma-2
+                    start_idx = attentions[0][0].shape[-2] # prompt len
+                    end_idx = start_idx + j
+                    
                 for layer in range(len(attentions[j])):
                     for head in range(len(attentions[j][layer][0])):
                         if j == 0:
                             attention_on_new = 0
                             attention_on_context = attentions[j][layer][0][head][0].mean().item()
                         else:
-                            attention_on_new = attentions[j][layer][0][head][0][-j:].mean().item()
-                            attention_on_context = attentions[j][layer][0][head][0][:-j].mean().item()
+                            attention_on_new = attentions[j][layer][0][head][0][start_idx:end_idx].mean().item()
+                            attention_on_context = attentions[j][layer][0][head][0][:start_idx].mean().item()
                         lookback_ratio = attention_on_context / (attention_on_new + attention_on_context)
                         lookback_ratios_token.append(lookback_ratio)
                 lookback_ratios.append(lookback_ratios_token)
