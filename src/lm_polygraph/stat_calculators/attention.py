@@ -155,7 +155,7 @@ class AttentionCalculator(StatCalculator):
             
             "attention_features": attn_features,
             "attention_max_features_token": attn_features_max_tokens,
-            "attention_max_features_values": attn_features_max_values,
+            # "attention_max_features_values": attn_features_max_values,
             "attention_features_values": attn_features_values,
         }
 
