@@ -183,7 +183,7 @@ class GreedyProbsCalculator(StatCalculator):
             }
         else:
             raise NotImplementedError
-
+                
         result_dict = {
             "input_tokens": batch["input_ids"].to("cpu").tolist(),
             "greedy_log_probs": cut_logits,

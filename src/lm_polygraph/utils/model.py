@@ -602,7 +602,6 @@ class WhiteboxModel(Model):
                     )
                     formatted_texts.append(formatted_chat)
                 texts = formatted_texts
-
         batch = self.tokenizer(texts, padding=True, return_tensors="pt")
         if batch["input_ids"].shape[-1] > 2048:
             print("Length input_ids: ", batch["input_ids"].shape[-1])

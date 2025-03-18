@@ -68,12 +68,38 @@ class AttentionCalculator(StatCalculator):
         attn_features_max_tokens = []
         attn_features_max_values = []
         attn_features_values = []
+        
+        if "gemma-3" in model.model_path:
+            n_layers = model.model.config.text_config.num_hidden_layers
+            n_heads = model.model.config.text_config.num_attention_heads
+        else:
+            n_layers = model.model.config.num_hidden_layers
+            n_heads = model.model.config.num_attention_heads
+            
+        def process_attention(attention, j, start_idx, end_idx, prompt_len):
+            # processing mostly for the gemma models; on different layer different sizes of attentions appears
+            n_attentions = attention.shape[-1]
+            # process rare cases for gemma-3
+            if attention.nelement() == 0:
+                # empty tensor
+                return torch.FloatTensor([0]*abs(j)).to(attention.device)
+            elif n_attentions < end_idx:
+                # n_attentions < n_tokens + prompt_len ?
+                if start_idx < 0:
+                    return attention[start_idx:n_attentions]
+                return attention[n_attentions - j:n_attentions]
+            elif ((n_attentions - j) > end_idx) and (start_idx < 0):
+                # e.g. start_idx = -1; end_idx = 1024; n_attentions = 1683
+                # (n_attentions - j) > end_idx -> starting position is higher than ending
+                return attention[prompt_len:prompt_len+j]
+            return attention[start_idx:end_idx]
+            
         for i in range(len(texts)):
             c = len(cut_sequences[i])
             attn_mask = np.zeros(
                 shape=(
-                    model.model.config.num_attention_heads
-                    * model.model.config.num_hidden_layers,
+                    n_heads
+                    * n_layers,
                     c,
                     c,
                 )
@@ -82,21 +108,27 @@ class AttentionCalculator(StatCalculator):
             for j in range(1, c):
                 start_idx = -j
                 end_idx = attentions[j][0].shape[-1]
+                prompt_len = attentions[0][0].shape[-2]
                 if attentions[0][0].shape[-1] == attentions[j][0].shape[-1]:
                     # for gemma-2
-                    start_idx = attentions[0][0].shape[-2] # prompt len
+                    start_idx = prompt_len # prompt len
                     end_idx = start_idx + j
-                attn_mask[:, j, :j] = (
-                    torch.vstack(
-                        [
-                            attentions[j][layer][0][head][0][start_idx:end_idx]
-                            for layer in range(len(attentions[j]))
-                            for head in range(len(attentions[j][layer][0]))
-                        ]
+                try:
+                    attn_mask[:, j, :j] = (
+                        torch.vstack(
+                            [
+                                process_attention(attentions[j][layer][0][head][0], j, start_idx, end_idx, prompt_len)
+                                for layer in range(len(attentions[j]))
+                                for head in range(len(attentions[j][layer][0]))
+                            ]
+                        )
+                        .cpu().float()
+                        .numpy()
                     )
-                    .cpu()
-                    .numpy()
-                )
+                except:
+                    print(texts)
+                    print(cut_sequences[i], attentions[0][0].shape, attentions[j][0].shape, len(attentions[j]), len(attentions[j][0][0]), start_idx, end_idx, attentions[j][0][0][0][0].shape)
+                    raise ValueError
             for j in range(c):
                 lookback_ratios_token = []
                 

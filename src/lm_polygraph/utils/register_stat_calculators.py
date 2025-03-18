@@ -85,6 +85,8 @@ def register_stat_calculators(
         _register(CrossEncoderSimilarityMatrixCalculator(nli_model=nli_model))
         _register(GreedyAlternativesNLICalculator(nli_model=nli_model))
         _register(GreedyAlternativesFactPrefNLICalculator(nli_model=nli_model))
+        _register(TrainGreedyAlternativesNLICalculator(nli_model=nli_model))
+        _register(TrainGreedyAlternativesFactPrefNLICalculator(nli_model=nli_model))
         _register(ClaimsExtractor(openai_chat=openai_chat, language=language))
         _register(
             PromptCalculator(
@@ -115,7 +117,6 @@ def register_stat_calculators(
             )
         )
 
-
         _register(AttentionCalculator())
 
         # _register(AllEmbeddingsCalculator())
@@ -125,15 +126,22 @@ def register_stat_calculators(
         _register(InternalStatesCalculator(stage="train"))
         _register(TokenInternalStatesCalculator(stage="train"))
     
-        hidden_layers = list(range(model.model.config.num_hidden_layers - 1)) + [-1]
+        if "gemma-3" in model.model_path:
+            hidden_layers = list(range(model.model.config.text_config.num_hidden_layers - 1)) + [-1]
+        else:
+            hidden_layers = list(range(model.model.config.num_hidden_layers - 1)) + [-1]
     
         _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage="train"))
         _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage=""))
 
         _register(SamplingGenerationEmbeddingsCalculator(hidden_layers=hidden_layers))
 
-        for layer in range(model.model.config.num_hidden_layers - 1):
-            _register(SourceEmbeddingsCalculator(hidden_layer=layer))
+        if "gemma-3" in model.model_path:
+            for layer in range(model.model.config.text_config.num_hidden_layers - 1):
+                _register(SourceEmbeddingsCalculator(hidden_layer=layer))
+        else:
+            for layer in range(model.model.config.num_hidden_layers - 1):
+                _register(SourceEmbeddingsCalculator(hidden_layer=layer))
     
         _register(InternalStatesCalculator(stage=""))
         _register(TokenInternalStatesCalculator(stage=""))
