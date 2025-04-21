@@ -5,6 +5,7 @@ from typing import Dict, List
 
 from .stat_calculator import StatCalculator
 from lm_polygraph.utils.model import WhiteboxModel, BlackboxModel
+import traceback
 
 
 class AttentionCalculator(StatCalculator):
@@ -32,6 +33,7 @@ class AttentionCalculator(StatCalculator):
                 
                 "attention_features_values",
                 "train_attention_features_values",
+                
             ],
             ["attentions_all"],
         )
@@ -126,8 +128,7 @@ class AttentionCalculator(StatCalculator):
                         .numpy()
                     )
                 except:
-                    print(texts)
-                    print(cut_sequences[i], attentions[0][0].shape, attentions[j][0].shape, len(attentions[j]), len(attentions[j][0][0]), start_idx, end_idx, attentions[j][0][0][0][0].shape)
+                    print(traceback.format_exc())
                     raise ValueError
             for j in range(c):
                 lookback_ratios_token = []
@@ -150,7 +151,7 @@ class AttentionCalculator(StatCalculator):
                         lookback_ratio = attention_on_context / (attention_on_new + attention_on_context)
                         lookback_ratios_token.append(lookback_ratio)
                 lookback_ratios.append(lookback_ratios_token)
-
+            
             max_attention = attn_mask.max(0)
             current_top_n = min(self.n_top_attention, max_attention.shape[1])
             topk = torch.topk(torch.tensor(max_attention), k=current_top_n, dim=1)

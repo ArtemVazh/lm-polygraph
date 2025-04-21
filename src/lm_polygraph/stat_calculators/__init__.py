@@ -31,6 +31,7 @@ from .embeddings import (
     ProxyEmbeddingsCalculator
 )
 from .attention import AttentionCalculator
+from .attention_fp import AttentionForwardPassCalculator
 from .ensemble_token_data import EnsembleTokenLevelDataCalculator
 from .semantic_matrix import SemanticMatrixCalculator
 from .cross_encoder_similarity import CrossEncoderSimilarityMatrixCalculator

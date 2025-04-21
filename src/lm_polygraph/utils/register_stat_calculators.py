@@ -118,6 +118,7 @@ def register_stat_calculators(
         )
 
         _register(AttentionCalculator())
+        _register(AttentionForwardPassCalculator())
 
         # _register(AllEmbeddingsCalculator())
         _register(SourceEmbeddingsCalculator())
