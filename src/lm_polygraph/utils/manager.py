@@ -494,9 +494,15 @@ class UEManager:
                 "greedy_texts",
                 "greedy_tokens",
                 "claim_texts_concatenated",
+                "train_greedy_texts",
+                "train_greedy_tokens",
+                "train_input_texts",
             ]:  # , "attention_all"]:
                 if key in batch_stats.keys():
                     self.stats[key] += batch_stats[key]
+            for key in batch_stats.keys():
+                if key.startswith("train_seq"):
+                    self.stats[key] += batch_stats[key].tolist()
             for processor in self.processors:
                 processor.on_batch(batch_stats, batch_gen_metrics, batch_estimations)
 
