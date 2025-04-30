@@ -571,6 +571,10 @@ class WhiteboxModel(Model):
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
+        if model.config._name_or_path == 'microsoft/Phi-3.5-mini-instruct':
+            end_token_id = tokenizer.convert_tokens_to_ids("<|end|>")
+            tokenizer.eos_token_id = end_token_id
+
         instance = WhiteboxModel(
             model, tokenizer, model_path, model_type, generation_params
         )

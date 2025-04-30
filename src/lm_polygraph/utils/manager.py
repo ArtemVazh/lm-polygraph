@@ -494,6 +494,7 @@ class UEManager:
                 "greedy_texts",
                 "greedy_tokens",
                 "claim_texts_concatenated",
+                "claims",
                 "train_greedy_texts",
                 "train_greedy_tokens",
                 "train_input_texts",
