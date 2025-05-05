@@ -606,16 +606,30 @@ class WhiteboxModel(Model):
                     )
                     formatted_texts.append(formatted_chat)
                 texts = formatted_texts
-        batch = self.tokenizer(texts, padding=True, return_tensors="pt")
+        if ("Falcon" in self.tokenizer.name_or_path):
+            batch = self.tokenizer(texts, padding=True, return_tensors="pt", return_token_type_ids=False)
+        else:
+            batch = self.tokenizer(texts, padding=True, return_tensors="pt")
         if batch["input_ids"].shape[-1] > 2048:
             print("Length input_ids: ", batch["input_ids"].shape[-1])
-            return self.tokenizer(
-                texts,
-                padding=True,
-                return_tensors="pt",
-                max_length=2048,
-                truncation=True,
-            )
+            if ("Falcon" in self.tokenizer.name_or_path):
+                return self.tokenizer(
+                    texts,
+                    padding=True,
+                    return_tensors="pt",
+                    max_length=2048,
+                    truncation=True,
+                    return_token_type_ids=False,
+                )
+            else:
+                return self.tokenizer(
+                    texts,
+                    padding=True,
+                    return_tensors="pt",
+                    max_length=2048,
+                    truncation=True,
+                )
+                
 
         return batch
 

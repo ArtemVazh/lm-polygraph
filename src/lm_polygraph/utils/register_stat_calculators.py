@@ -80,6 +80,10 @@ def register_stat_calculators(
         _register(SamplingGenerationCalculator())
         _register(BartScoreCalculator())
         _register(ModelScoreCalculator())
+        
+        _register(GreedySemanticMatrixCalculator(nli_model=nli_model))
+        _register(ConcatGreedySemanticMatrixCalculator(nli_model=nli_model))
+        
         # _register(EmbeddingsCalculator())
         _register(EnsembleTokenLevelDataCalculator())
         _register(CrossEncoderSimilarityMatrixCalculator(nli_model=nli_model))

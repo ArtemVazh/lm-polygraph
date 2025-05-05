@@ -435,12 +435,13 @@ class UEManager:
 
         iterable_data = tqdm(self.data) if self.verbose else self.data
 
-        for batch_i, (inp_texts, target_texts, max_new_tokens) in enumerate(
+        for batch_i, (inp_texts, raw_inp_texts, target_texts, max_new_tokens) in enumerate(
             iterable_data
         ):
             batch_stats: Dict[str, np.ndarray] = {}
             for key, val in [
                 ("input_texts", inp_texts),
+                ("no_fewshot_input_texts", raw_inp_texts),
                 ("target_texts", target_texts),
             ]:
                 self.stats[key] += val
