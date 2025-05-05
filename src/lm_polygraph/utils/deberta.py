@@ -66,7 +66,7 @@ class Deberta:
         self._deberta = DebertaForSequenceClassification.from_pretrained(
             self.deberta_path, problem_type="multi_label_classification"
         )
-        self._deberta_tokenizer = DebertaTokenizer.from_pretrained(self.deberta_path)
+        self._deberta_tokenizer = DebertaTokenizer.from_pretrained(self.deberta_path, truncation_side="left")
         self._deberta.to(self.device)
         self._deberta.eval()
 

@@ -201,14 +201,14 @@ class ConcatGreedySemanticMatrixCalculator(StatCalculator):
             for first_texts, second_texts in tqdm(dl):
                 batch = list(zip(first_texts, second_texts))
                 encoded = tokenizer.batch_encode_plus(
-                    batch, padding=True, return_tensors="pt"
+                    batch, padding=True, return_tensors="pt", truncation=True, max_length=1024,
                 ).to(device)
                 logits = deberta.deberta(**encoded).logits.detach().to(device)
                 probs_f.append(softmax(logits).cpu().detach())
 
                 batch = list(zip(second_texts, first_texts))
                 encoded = tokenizer.batch_encode_plus(
-                    batch, padding=True, return_tensors="pt"
+                    batch, padding=True, return_tensors="pt", truncation=True, max_length=1024,
                 ).to(device)
                 logits = deberta.deberta(**encoded).logits.detach().to(device)
                 probs_b.append(softmax(logits).cpu().detach())
