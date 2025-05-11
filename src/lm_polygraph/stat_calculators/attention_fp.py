@@ -59,7 +59,7 @@ class AttentionForwardPassCalculator(StatCalculator):
             except:
                 torch.cuda.empty_cache()
                 with torch.no_grad():
-                    forwardpass_attentions = model.model(input_ids[-1024:], output_attentions=True).attentions
+                    forwardpass_attentions = model.model(input_ids[-256:], output_attentions=True).attentions
                     forwardpass_attentions = tuple(attention.to("cpu") for attention in forwardpass_attentions)
                     forwardpass_attentions = torch.cat(forwardpass_attentions).float().numpy()
                 
