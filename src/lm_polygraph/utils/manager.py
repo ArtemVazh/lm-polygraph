@@ -678,7 +678,7 @@ class UEManager:
             stat_calculators = self.train_stat_calculators
             max_new_tokens = self.max_new_tokens
         if len(stat_calculators) and (data is not None):
-            for inp_texts, target_texts, max_new_tokens in tqdm(data):
+            for inp_texts, raw_inp_texts, target_texts, max_new_tokens in tqdm(data):
                 batch_stats: Dict[str, np.ndarray] = {}
                 for key, val in [
                     ("input_texts", inp_texts),

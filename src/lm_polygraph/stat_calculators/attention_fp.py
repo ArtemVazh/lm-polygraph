@@ -41,14 +41,15 @@ class AttentionForwardPassCalculator(StatCalculator):
                 - 'attention' (List[List[np.array]]): attention maps at each token, if applicable to the model,
         """
         batch: Dict[str, torch.Tensor] = model.tokenize(texts)
-        batch = {k: v.to(model.device()) for k, v in batch.items()}
+        device = model.device()
+        batch = {k: v.to(device) for k, v in batch.items()}
         
         cut_sequences = dependencies["greedy_tokens"]
         
         forwardpass_attention_weights = []
 
         for i in range(len(texts)):
-            input_ids = torch.cat([batch['input_ids'], torch.tensor([cut_sequences[i]]).to(model.device())], axis=1)
+            input_ids = torch.cat([batch['input_ids'].to(device), torch.tensor([cut_sequences[i]]).to(device)], axis=1)
             torch.cuda.empty_cache()
             with torch.no_grad():
                 forwardpass_attentions = model.model(input_ids[-2048:], output_attentions=True).attentions
