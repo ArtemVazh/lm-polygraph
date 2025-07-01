@@ -13,6 +13,7 @@ from .sample import (
     SamplingGenerationCalculator,
     BlackboxSamplingGenerationCalculator,
     SamplingGenerationEmbeddingsCalculator,
+    SamplingGenerationAttentionCalculator,
 )
 from .greedy_alternatives_nli import (
     GreedyAlternativesNLICalculator,

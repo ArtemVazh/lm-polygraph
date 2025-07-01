@@ -140,6 +140,7 @@ def register_stat_calculators(
         _register(EmbeddingsCalculator(hidden_layers=hidden_layers, stage=""))
 
         _register(SamplingGenerationEmbeddingsCalculator(hidden_layers=hidden_layers))
+        _register(SamplingGenerationAttentionCalculator())
 
         if "gemma-3" in model.model_path:
             for layer in range(model.model.config.text_config.num_hidden_layers - 1):

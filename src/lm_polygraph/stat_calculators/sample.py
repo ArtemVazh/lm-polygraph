@@ -67,10 +67,11 @@ class BlackboxSamplingGenerationCalculator(StatCalculator):
 
 def _gen_samples(n_samples, model, batch, **kwargs):
     batch_size = len(batch["input_ids"])
-    logits, sequences, embeddings = (
+    logits, sequences, embeddings, attentions = (
         [[] for _ in range(batch_size)],
         [[] for _ in range(batch_size)],
         [],
+        [[] for _ in range(batch_size)],
     )
     with torch.no_grad():
         for k in range(n_samples):
@@ -92,8 +93,9 @@ def _gen_samples(n_samples, model, batch, **kwargs):
             for i in range(batch_size):
                 sequences[i].append(out.sequences[i])
                 logits[i].append(cur_logits[i])
+                attentions[i].append(out.attentions)
     sequences = [s for sample_seqs in sequences for s in sample_seqs]
-    return sequences, sum(logits, []), embeddings
+    return sequences, sum(logits, []), embeddings, attentions
 
 
 class SamplingGenerationCalculator(StatCalculator):
@@ -117,6 +119,7 @@ class SamplingGenerationCalculator(StatCalculator):
                 "sample_texts",
                 "sample_log_likelihoods",
                 "sample_embeddings_all",
+                "sample_attention_all",
             ],
             [],
         )
@@ -146,13 +149,14 @@ class SamplingGenerationCalculator(StatCalculator):
         batch: Dict[str, torch.Tensor] = model.tokenize(texts)
         batch = {k: v.to(model.device()) for k, v in batch.items()}
         samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n)
-        sequences, logits, embeddings = _gen_samples(
+        sequences, logits, embeddings, attentions = _gen_samples(
             samples_n,
             model,
             batch,
             output_scores=True,
             return_dict_in_generate=True,
             output_hidden_states=True,
+            output_attentions=True,
             max_new_tokens=max_new_tokens,
             min_new_tokens=2,
             do_sample=True,
@@ -201,6 +205,7 @@ class SamplingGenerationCalculator(StatCalculator):
             "sample_tokens": tokens,
             "sample_texts": texts,
             "sample_embeddings_all": embeddings,
+            "sample_attention_all": attentions,
         }
 
 
@@ -318,5 +323,82 @@ class SamplingGenerationEmbeddingsCalculator(StatCalculator):
                         )
             results[f"sample_embeddings{layer_name}"] = embeddings
             results[f"sample_embeddings_last_token{layer_name}"] = embeddings_last_token
+
+        return results
+    
+    
+class SamplingGenerationAttentionCalculator(StatCalculator):
+
+    def __init__(self, samples_n: int = 10):
+        """
+        Parameters:
+            samples_n (int): number of samples to generate per input text. Default: 10
+        """
+        self.samples_n = samples_n
+
+        super().__init__(
+            ["sample_attention"],
+            ["sample_attention_all"],
+        )
+
+    def __call__(
+        self,
+        dependencies: Dict[str, np.array],
+        texts: List[str],
+        model: WhiteboxModel,
+        max_new_tokens: int = 100,
+    ) -> Dict[str, np.ndarray]:
+        """
+        Calculates the statistics of sampling texts.
+
+        Parameters:
+            dependencies (Dict[str, np.ndarray]): input statistics, can be empty (not used).
+            texts (List[str]): Input texts batch used for model generation.
+            model (Model): Model used for generation.
+            max_new_tokens (int): Maximum number of new tokens at model generation. Default: 100.
+        Returns:
+            Dict[str, np.ndarray]: dictionary with the following items:
+                - 'sample_texts' (List[List[str]]): `samples_n` texts for each input text in the batch,
+                - 'sample_tokens' (List[List[List[float]]]): tokenized 'sample_texts',
+                - 'sample_log_probs' (List[List[float]]): sum of the log probabilities at each token of the sampling generation.
+                - 'sample_log_likelihoods' (List[List[List[float]]]): log probabilities at each token of the sampling generation.
+        """
+        batch: Dict[str, torch.Tensor] = model.tokenize(texts)
+
+        batch_size = len(batch["input_ids"])
+        results = {}
+    
+        attention_all = [[] for _ in range(batch_size)]
+        samples_n = getattr(model.generation_parameters, "samples_n", self.samples_n)
+
+        for k, sample_attention in enumerate(dependencies["sample_attention_all"]):
+            for i in range(samples_n):
+                attentions = sample_attention[i]
+                c = len(dependencies["sample_tokens"][k][i])
+                attn_mask = np.zeros(
+                    shape=(
+                        model.model.config.num_attention_heads
+                        * model.model.config.num_hidden_layers,
+                        c,
+                        c,
+                    )
+                )
+                for j in range(1, c):
+                    stacked_attention = torch.vstack(
+                        [
+                            attentions[j][layer][0][head][0][-j:]
+                            for layer in range(len(attentions[j]))
+                            for head in range(len(attentions[j][layer][0]))
+                        ]
+                    )
+                    if stacked_attention.dtype == torch.bfloat16:
+                        stacked_attention = stacked_attention.to(
+                            torch.float16
+                        )  # numpy does not support bfloat16
+
+                    attn_mask[:, j, :j] = stacked_attention.cpu().numpy()
+                attention_all[k].append(attn_mask)
+
+            results[f"sample_attention"] = attention_all
 
         return results
