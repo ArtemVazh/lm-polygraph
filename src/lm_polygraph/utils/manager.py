@@ -358,6 +358,7 @@ class UEManager:
             if "train_greedy_log_likelihoods" in train_stats
             else []
         )
+        self.required_train_stats = train_stats
         train_stats, _ = _order_calculators(
             train_stats,
             stat_calculators_dict,
@@ -365,13 +366,14 @@ class UEManager:
         )
         self.train_stat_calculators: List[StatCalculator] = [
             stat_calculators_dict[c] for c in train_stats
-        ]
+        ]    
         background_train_stats = [
             s
             for e in self.estimators
             for s in e.stats_dependencies
             if s.startswith("background_train")
         ]
+        self.required_train_stats += background_train_stats
         background_train_stats, _ = _order_calculators(
             background_train_stats,
             stat_calculators_dict,
@@ -677,6 +679,8 @@ class UEManager:
             data = self.train_data
             stat_calculators = self.train_stat_calculators
             max_new_tokens = self.max_new_tokens
+        
+        key_prefix = "background_train_" if background else "train_"
         if len(stat_calculators) and (data is not None):
             for inp_texts, raw_inp_texts, target_texts, max_new_tokens in tqdm(data):
                 batch_stats: Dict[str, np.ndarray] = {}
@@ -696,11 +700,12 @@ class UEManager:
                         if not len(stat_value):
                             continue
                         batch_stats[stat] = stat_value
-
                 for stat in batch_stats.keys():
                     if "embeddings_all" in stat:
                         continue
                     if "attentions_all" in stat:
+                        continue
+                    if key_prefix + stat.replace("_decoder", "") not in self.required_train_stats:
                         continue
                     if stat in train_stats.keys():
                         train_stats[stat].append(batch_stats[stat])
@@ -710,7 +715,6 @@ class UEManager:
                 torch.cuda.empty_cache()
                 gc.collect()
             
-            key_prefix = "background_train_" if background else "train_"
             keys = list(train_stats.keys())
             for stat in keys:
                 if any(s is None for s in train_stats[stat]):

@@ -75,6 +75,7 @@ class GreedyProbsCalculator(StatCalculator):
                 "train_target_texts",
                 "train_input_texts",
                 "train_greedy_tokens_alternatives",
+                "train_greedy_log_probs",
             ],
             [],
         )
@@ -129,7 +130,6 @@ class GreedyProbsCalculator(StatCalculator):
                 ),
             )
             logits = torch.stack(out.scores, dim=1)
-            
             attentions = out.attentions
             sequences = out.sequences
 

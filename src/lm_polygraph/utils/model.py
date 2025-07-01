@@ -610,7 +610,7 @@ class WhiteboxModel(Model):
             batch = self.tokenizer(texts, padding=True, return_tensors="pt", return_token_type_ids=False)
         else:
             batch = self.tokenizer(texts, padding=True, return_tensors="pt")
-        if batch["input_ids"].shape[-1] > 2048:
+        if batch["input_ids"].shape[-1] > 2560:
             print("Length input_ids: ", batch["input_ids"].shape[-1])
             if ("Falcon" in self.tokenizer.name_or_path):
                 return self.tokenizer(
