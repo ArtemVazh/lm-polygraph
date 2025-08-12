@@ -26,6 +26,7 @@ from transformers import (
 from lm_polygraph.utils.generation_parameters import GenerationParameters
 from lm_polygraph.utils.ensemble_utils.ensemble_generator import EnsembleGenerationMixin
 from lm_polygraph.utils.ensemble_utils.dropout import replace_dropout
+from accelerate import infer_auto_device_map
 
 log = logging.getLogger("lm_polygraph")
 
@@ -524,12 +525,17 @@ class WhiteboxModel(Model):
             model_path, trust_remote_code=True, **kwargs
         )
         generation_params = GenerationParameters(**generation_params)
-
+        
         if any(["CausalLM" in architecture for architecture in config.architectures]):
             model_type = "CausalLM"
-            model = AutoModelForCausalLM.from_pretrained(
-                model_path, trust_remote_code=True, **kwargs
-            )
+            if torch.cuda.device_count() == 3:
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_path, trust_remote_code=True, max_memory={0: "2GB", 1: "70GB", 2: "70GB"}, **kwargs
+                )
+            else:
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_path, trust_remote_code=True, **kwargs
+                )
         elif any(
             [
                 ("Seq2SeqLM" in architecture)

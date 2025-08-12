@@ -1,3 +1,4 @@
+import gc
 import torch
 import numpy as np
 
@@ -50,12 +51,14 @@ class AttentionForwardPassCalculator(StatCalculator):
 
         for i in range(len(texts)):
             input_ids = torch.cat([batch['input_ids'].to(device), torch.tensor([cut_sequences[i]]).to(device)], axis=1)
+            with torch.inference_mode():
+                forwardpass_attentions = model.model(input_ids[:, -2048:], output_attentions=True, use_cache=False).attentions
+                forwardpass_attentions_cpu = tuple(attention.to("cpu") for attention in forwardpass_attentions)
+                forwardpass_attentions_np = torch.cat(forwardpass_attentions_cpu).float().numpy()
+            forwardpass_attention_weights.append(forwardpass_attentions_np)
+            del forwardpass_attentions, forwardpass_attentions_cpu
+            gc.collect()
             torch.cuda.empty_cache()
-            with torch.no_grad():
-                forwardpass_attentions = model.model(input_ids[-2048:], output_attentions=True).attentions
-                forwardpass_attentions = tuple(attention.to("cpu") for attention in forwardpass_attentions)
-                forwardpass_attentions = torch.cat(forwardpass_attentions).float().numpy()
-            forwardpass_attention_weights.append(forwardpass_attentions)
             
         forwardpass_attention_weights = np.array(forwardpass_attention_weights)
 
