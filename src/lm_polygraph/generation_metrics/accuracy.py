@@ -5,9 +5,9 @@ import logging
 
 from typing import List, Dict
 from .generation_metric import GenerationMetric
+from .grader import grade_answer
 
 log = logging.getLogger("lm_polygraph")
-
 
 class AccuracyMetric(GenerationMetric):
     """
@@ -16,7 +16,7 @@ class AccuracyMetric(GenerationMetric):
     """
 
     def __init__(
-        self, target_ignore_regex=None, output_ignore_regex=None, normalize=False
+        self, target_ignore_regex=None, output_ignore_regex=None, normalize=False, parse_latex=False,
     ):
         super().__init__(["greedy_texts"], "sequence")
         self.target_ignore_regex = (
@@ -26,6 +26,7 @@ class AccuracyMetric(GenerationMetric):
             re.compile(output_ignore_regex) if output_ignore_regex else None
         )
         self.normalize = normalize
+        self.parse_latex = parse_latex
 
         if self.target_ignore_regex or self.output_ignore_regex or self.normalize:
             log.warning(
@@ -35,9 +36,12 @@ class AccuracyMetric(GenerationMetric):
     def __str__(self):
         return "Accuracy"
 
-    def _score_single(self, output: str, target: str) -> int:
-        if output.strip() == target.strip():
-            return 1
+    def _score_single(self, output: str, target: str, is_latex: bool = False) -> int:
+        if is_latex:
+            return grade_answer(output, target)*1.0
+        else: 
+            if output.strip() == target.strip():
+                return 1
         return 0
 
     def _filter_text(self, text: str, ignore_regex: re.Pattern) -> str:
@@ -74,10 +78,10 @@ class AccuracyMetric(GenerationMetric):
             ref = self._filter_text(ref, self.target_ignore_regex)
             hyp = self._filter_text(hyp, self.output_ignore_regex)
 
-            if self.normalize:
-                ref = self._normalize_text(ref)
+            if self.normalize and (not self.parse_latex):
+                ref = self._normalize_text(ref) 
                 hyp = self._normalize_text(hyp)
-
-            result.append(self._score_single(hyp, ref))
+                
+            result.append(self._score_single(hyp, ref, self.parse_latex))
 
         return np.array(result)
