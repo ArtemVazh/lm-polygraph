@@ -6,10 +6,18 @@ from sklearn.linear_model import LogisticRegressionCV
 from sklearn.model_selection import train_test_split
 from transformers import set_seed, AutoConfig
 
+from sklearn.decomposition import KernelPCA
+from sklearn.preprocessing import PowerTransformer
+from sklearn.pipeline import Pipeline
+
 from typing import Dict, List
 
 from lm_polygraph.estimators.estimator import Estimator
 from .common import cross_val_hp, TrainerMLP
+from .energy import fft_energy_ratio, layerwise_total_energy
+from .dimension_reduction import layerwise_norms
+from .curvatures import angle_curvature, curvature_menger, curvature_arc_chord, curvature_second_derivative
+from .transitions import layerwise_angles, layerwise_sigmas
 
 
 class AttentionPooling(nn.Module):
@@ -192,6 +200,8 @@ class Sheeps(Estimator):
         metric_thr: float = 0.3,
         dev_size: float = 0.5,
         model_name: str = None,
+        with_dynamic: bool = False, 
+        cache_dir: str = None,
     ):
         self.model_name = model_name
         self.model_config = AutoConfig.from_pretrained(self.model_name)
@@ -217,16 +227,41 @@ class Sheeps(Estimator):
             )
             for layer in self.layers
         ]
+        self.with_dynamic = with_dynamic
+        if self.with_dynamic:
+            self.dynamic_functions = {
+                "angle_curvature": lambda x: angle_curvature(x, degrees=False),
+                "curvature_menger": lambda x: curvature_menger(x),
+                "curvature_arc_chord": lambda x: curvature_arc_chord(x),
+                "curvature_second_derivative": lambda x: curvature_second_derivative(x),
+                "angle_curvatulayerwise_anglesre": lambda x: layerwise_angles(x),
+                "layerwise_sigmas": lambda x: layerwise_sigmas(x),
+                #### energy
+                "layerwise_norms": lambda x: layerwise_norms(x, norm=2),
+                "layerwise_total_energy": lambda x: layerwise_total_energy(x),
+                "fft_energy_ratio_k5": lambda x: fft_energy_ratio(x, top_k=5),
+            }
 
         super().__init__(
             ["token_embeddings", "train_token_embeddings", "train_metrics"], "sequence"
         )
-        self.ue_predictor = LogisticRegressionCV()
+        if self.with_dynamic:
+            self.ue_predictor = Pipeline([
+                ('scaler', PowerTransformer()),
+                ('logreg', LogisticRegressionCV(max_iter=1000, tol=1e-4, cv=10))
+            ])
+        else:
+            self.ue_predictor = LogisticRegressionCV()
+            
+        self.cache_dir = cache_dir
+            
 
     def __str__(self):
+        if self.with_dynamic:
+            return f"DynamicSheeps_{self.embeddings_type}"
         return f"Sheeps_{self.embeddings_type}"
 
-    def __call__(self, stats: Dict[str, np.ndarray]) -> np.ndarray:
+    def __call__(self, stats: Dict[str, np.ndarray], folder_name: str = "", eval_idx: int = None) -> np.ndarray:
         if not self.is_fitted:
             set_seed(42)
             train_metrics_raw = stats["train_metrics"]
@@ -237,7 +272,7 @@ class Sheeps(Estimator):
                 np.arange(len(train_greedy_tokens)),
                 test_size=self.dev_size,
                 random_state=42,
-            )
+            )            
             train_sheeps = []
             for layer in self.layers:
                 # Prepare stats for this layer
@@ -263,7 +298,43 @@ class Sheeps(Estimator):
                 }
                 score = self.layersheeps[layer](train_stats).reshape(-1)
                 train_sheeps.append(score)
+                
+            if self.with_dynamic:
+                final_embeddings = []
+                for layer in self.layers:
+                    layer_name = "" if layer == -1 else f"_{layer}"
+                    train_embeddings = stats[
+                        f"train_token_embeddings_{self.embeddings_type}{layer_name}"
+                    ]
+                    k = 0
+                    layer_embeddings = []
+                    for tokens in train_greedy_tokens:
+                        layer_embeddings.append(train_embeddings[k + len(tokens) - 1 : k + len(tokens)][0]) ## last token
+                        k += len(tokens)
+                    layer_embeddings = np.array(layer_embeddings) # [B, D]
+                    final_embeddings.append(layer_embeddings)
+                final_embeddings = np.array(final_embeddings) # [L, B, D]
+                final_embeddings = torch.tensor(final_embeddings.transpose(1, 0, 2)[dev_idx])
+                
+                train_dynamics = []
+                for func_name in self.dynamic_functions.keys():
+                    features = self.dynamic_functions[func_name](final_embeddings)
+                    if self.cache_dir:
+                        np.save(f'{self.cache_dir}/{folder_name}/train_{func_name}.npy', features)
+                    for feature in features.T:
+                        train_dynamics.append(feature)
+                train_dynamics = np.array(train_dynamics).T
+                if self.cache_dir:
+                    np.save(f'{self.cache_dir}/{folder_name}/train_dynamics.npy', train_dynamics)
+                self.pca = KernelPCA(n_components=10, kernel='rbf')
+                train_pca_dynamics = self.pca.fit_transform(train_dynamics)
+                
             train_sheeps = np.array(train_sheeps).T
+            if self.with_dynamic:
+                train_sheeps = np.hstack([train_sheeps, train_pca_dynamics])
+            if self.cache_dir:
+                np.save(f'{self.cache_dir}/{folder_name}/train_features.npy', train_sheeps)
+                np.save(f'{self.cache_dir}/{folder_name}/train_targets.npy', train_metrics[dev_idx])
             self.ue_predictor.fit(train_sheeps, train_metrics[dev_idx])
             self.is_fitted = True
 
@@ -271,7 +342,42 @@ class Sheeps(Estimator):
         for layer in self.layers:
             score = self.layersheeps[layer](stats).reshape(-1)
             eval_scores.append(score)
+        
+        greedy_tokens = stats["greedy_tokens"]
+        if self.with_dynamic:
+            final_embeddings = []
+            for layer in self.layers:
+                layer_name = "" if layer == -1 else f"_{layer}"
+                embeddings = stats[
+                    f"token_embeddings_{self.embeddings_type}{layer_name}"
+                ]
+                k = 0
+                layer_embeddings = []
+                for tokens in greedy_tokens:
+                    layer_embeddings.append(embeddings[k + len(tokens) - 1 : k + len(tokens)][0])
+                    k += len(tokens)
+                layer_embeddings = np.array(layer_embeddings) # [B, D]
+                final_embeddings.append(layer_embeddings)
+            final_embeddings = np.array(final_embeddings) # [L, B, D]
+            final_embeddings = torch.tensor(final_embeddings.transpose(1, 0, 2))
+                       
+            eval_dynamics = []     
+            for func_name in self.dynamic_functions.keys():
+                features = self.dynamic_functions[func_name](final_embeddings)
+                if self.cache_dir:
+                    np.save(f'{self.cache_dir}/{folder_name}/eval_{func_name}_{eval_idx}.npy', features)
+                for feature in features.T:
+                    eval_dynamics.append(feature)
+            eval_dynamics = np.array(eval_dynamics).T
+            if self.cache_dir:
+                np.save(f'{self.cache_dir}/{folder_name}/eval_dynamics_{eval_idx}.npy', eval_dynamics)
+            eval_pca_dynamics = self.pca.transform(eval_dynamics)
+                    
         eval_scores = np.array(eval_scores).T
+        if self.with_dynamic:
+            eval_scores = np.hstack([eval_scores, eval_pca_dynamics])
         eval_scores[np.isnan(eval_scores)] = 0
+        if self.cache_dir:
+            np.save(f'{self.cache_dir}/{folder_name}/eval_features_{eval_idx}.npy', eval_scores)
         ue = self.ue_predictor.predict_proba(eval_scores)[:, 1]
         return ue
