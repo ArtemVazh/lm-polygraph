@@ -540,7 +540,6 @@ class UEManager:
                     self.total_bad_estimators[bad_estimator] = batch_i
 
             torch.cuda.empty_cache()
-            gc.collect()
 
         for (gen_level, gen_name), generation_metric in self.gen_metrics.items():
             for ue_metric in self.ue_metrics:
@@ -682,7 +681,7 @@ class UEManager:
         
         key_prefix = "background_train_" if background else "train_"
         if len(stat_calculators) and (data is not None):
-            for inp_texts, raw_inp_texts, target_texts, max_new_tokens in tqdm(data):
+            for batch_i, (inp_texts, raw_inp_texts, target_texts, max_new_tokens) in tqdm(enumerate(data)):
                 batch_stats: Dict[str, np.ndarray] = {}
                 for key, val in [
                     ("input_texts", inp_texts),
@@ -708,12 +707,19 @@ class UEManager:
                     if key_prefix + stat.replace("_decoder", "") not in self.required_train_stats:
                         continue
                     if stat in train_stats.keys():
-                        train_stats[stat].append(batch_stats[stat])
+                        if "greedy_log_probs" in stat:
+                            train_stats[stat].append([log_prob.astype(np.float16) for log_prob in batch_stats[stat]])
+                        else:
+                            train_stats[stat].append(batch_stats[stat])
                     else:
-                        train_stats[stat] = [batch_stats[stat]]
+                        if "greedy_log_probs" in stat:
+                            train_stats[stat] = [[log_prob.astype(np.float16) for log_prob in batch_stats[stat]]]
+                        else:
+                            train_stats[stat] = [batch_stats[stat]]
                 del batch_stats
                 torch.cuda.empty_cache()
-                gc.collect()
+                if batch_i % 10 == 0:
+                    gc.collect()
             
             keys = list(train_stats.keys())
             for stat in keys:
