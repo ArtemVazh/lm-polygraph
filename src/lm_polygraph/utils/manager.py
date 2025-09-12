@@ -681,7 +681,8 @@ class UEManager:
         
         key_prefix = "background_train_" if background else "train_"
         if len(stat_calculators) and (data is not None):
-            for batch_i, (inp_texts, raw_inp_texts, target_texts, max_new_tokens) in tqdm(enumerate(data)):
+            batch_i = 0
+            for inp_texts, raw_inp_texts, target_texts, max_new_tokens in tqdm(data):
                 batch_stats: Dict[str, np.ndarray] = {}
                 for key, val in [
                     ("input_texts", inp_texts),
@@ -720,6 +721,7 @@ class UEManager:
                 torch.cuda.empty_cache()
                 if batch_i % 10 == 0:
                     gc.collect()
+                batch_i += 1
             
             keys = list(train_stats.keys())
             for stat in keys:
