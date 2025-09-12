@@ -127,7 +127,7 @@ class LayerSheeps(Estimator):
             aggregated_embeddings, lens = [], []
             for tokens in train_greedy_tokens:
                 aggregated_embeddings.append(
-                    torch.tensor(np.array(train_embeddings[k : k + len(tokens)]))
+                    torch.from_numpy(np.array(train_embeddings[k : k + len(tokens)]))
                 )
                 lens.append(len(tokens))
                 k += len(tokens)
@@ -140,7 +140,7 @@ class LayerSheeps(Estimator):
 
             for i, l in enumerate(lens):
                 attention_mask[i, l:] = 1
-            attention_mask = torch.tensor(attention_mask).int()
+            attention_mask = torch.from_numpy(attention_mask).int()
 
             self.params["n_features"] = [aggregated_embeddings.shape[-1]]
             best_params = cross_val_hp(
@@ -163,7 +163,7 @@ class LayerSheeps(Estimator):
         aggregated_embeddings, lens = [], []
         for tokens in greedy_tokens:
             aggregated_embeddings.append(
-                torch.tensor(np.array(embeddings[k : k + len(tokens)]))
+                torch.from_numpy(np.array(embeddings[k : k + len(tokens)]))
             )
             lens.append(len(tokens))
             k += len(tokens)
@@ -176,7 +176,7 @@ class LayerSheeps(Estimator):
         for i, l in enumerate(lens):
             attention_mask[i, l:] = 1
 
-        attention_mask = torch.tensor(attention_mask).int()
+        attention_mask = torch.from_numpy(attention_mask).int()
         ue = self.ue_predictor.predict(aggregated_embeddings, attention_mask)
 
         return ue
@@ -234,7 +234,7 @@ class Sheeps(Estimator):
                 "curvature_menger": lambda x: curvature_menger(x),
                 "curvature_arc_chord": lambda x: curvature_arc_chord(x),
                 "curvature_second_derivative": lambda x: curvature_second_derivative(x),
-                "angle_curvatulayerwise_anglesre": lambda x: layerwise_angles(x),
+                "layerwise_angles": lambda x: layerwise_angles(x),
                 "layerwise_sigmas": lambda x: layerwise_sigmas(x),
                 #### energy
                 "layerwise_norms": lambda x: layerwise_norms(x, norm=2),
@@ -248,10 +248,10 @@ class Sheeps(Estimator):
         if self.with_dynamic:
             self.ue_predictor = Pipeline([
                 ('scaler', PowerTransformer()),
-                ('logreg', LogisticRegressionCV(max_iter=1000, tol=1e-4, cv=10))
+                ('logreg', LogisticRegressionCV(max_iter=1000, tol=1e-4, cv=5, n_jobs=-1))
             ])
         else:
-            self.ue_predictor = LogisticRegressionCV()
+            self.ue_predictor = LogisticRegressionCV(cv=5, n_jobs=-1, max_iter=1000)
             
         self.cache_dir = cache_dir
             
@@ -314,7 +314,7 @@ class Sheeps(Estimator):
                     layer_embeddings = np.array(layer_embeddings) # [B, D]
                     final_embeddings.append(layer_embeddings)
                 final_embeddings = np.array(final_embeddings) # [L, B, D]
-                final_embeddings = torch.tensor(final_embeddings.transpose(1, 0, 2)[dev_idx])
+                final_embeddings = torch.from_numpy(final_embeddings.transpose(1, 0, 2)[dev_idx])
                 
                 train_dynamics = []
                 for func_name in self.dynamic_functions.keys():
@@ -359,7 +359,7 @@ class Sheeps(Estimator):
                 layer_embeddings = np.array(layer_embeddings) # [B, D]
                 final_embeddings.append(layer_embeddings)
             final_embeddings = np.array(final_embeddings) # [L, B, D]
-            final_embeddings = torch.tensor(final_embeddings.transpose(1, 0, 2))
+            final_embeddings = torch.from_numpy(final_embeddings.transpose(1, 0, 2))
                        
             eval_dynamics = []     
             for func_name in self.dynamic_functions.keys():
