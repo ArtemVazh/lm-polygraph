@@ -697,8 +697,9 @@ class UEManager:
                     for stat, stat_value in new_stats.items():
                         if stat in batch_stats.keys():
                             continue
-                        if not len(stat_value):
-                            continue
+                        if not isinstance(stat_value, int):
+                            if not len(stat_value):
+                                continue
                         batch_stats[stat] = stat_value
                 for stat in batch_stats.keys():
                     if "embeddings_all" in stat:
