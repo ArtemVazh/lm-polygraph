@@ -532,6 +532,10 @@ class WhiteboxModel(Model):
                 model = AutoModelForCausalLM.from_pretrained(
                     model_path, trust_remote_code=True, max_memory={0: "2GB", 1: "70GB", 2: "70GB"}, **kwargs
                 )
+            # elif torch.cuda.device_count() == 2:
+            #     model = AutoModelForCausalLM.from_pretrained(
+            #         model_path, trust_remote_code=True, max_memory={0: "2GB", 1: "70GB"}, **kwargs
+            #     )
             else:
                 model = AutoModelForCausalLM.from_pretrained(
                     model_path, trust_remote_code=True, **kwargs

@@ -131,6 +131,8 @@ class GreedyProbsCalculator(StatCalculator):
             )
             logits = torch.stack(out.scores, dim=1)
             attentions = out.attentions
+            if isinstance(attentions, tuple):
+                attentions = list(attentions)
             sequences = out.sequences
 
         cut_logits = []
@@ -144,17 +146,21 @@ class GreedyProbsCalculator(StatCalculator):
             else:
                 seq = sequences[i, 1:].cpu()
             length, text_length = len(seq), len(seq)
+            start_index = 0
             for j in range(len(seq)):
+                if seq[j] == getattr(model.tokenizer, "eos_think_id", None):
+                    start_index = j + 1
                 if seq[j] == model.tokenizer.eos_token_id:
                     length = j + 1
                     text_length = j
                     break
-            cut_sequences.append(seq[:length].tolist())
-            cut_texts.append(model.tokenizer.decode(seq[:text_length]))
-            cut_logits.append(logits[i, :length, :].cpu().numpy())
+            cut_sequences.append(seq[start_index:length].tolist())
+            cut_texts.append(model.tokenizer.decode(seq[start_index:text_length]))
+            cut_logits.append(logits[i, start_index:length, :].cpu().numpy())
+            length = length - start_index
             cut_alternatives.append([[] for _ in range(length)])
             for j in range(length):
-                lt = logits[i, j, :].cpu().numpy()
+                lt = logits[i, j + start_index, :].cpu().numpy()
                 best_tokens = np.argpartition(lt, -self.n_alternatives)
                 ln = len(best_tokens)
                 best_tokens = best_tokens[ln - self.n_alternatives : ln]
@@ -192,6 +198,7 @@ class GreedyProbsCalculator(StatCalculator):
             "greedy_texts": cut_texts,
             "greedy_log_likelihoods": ll,
             "attentions_all": attentions,
+            "start_index": start_index,
         }
         result_dict.update(embeddings_dict)
 

@@ -156,7 +156,7 @@ class SamplingGenerationCalculator(StatCalculator):
             output_scores=True,
             return_dict_in_generate=True,
             output_hidden_states=True,
-            output_attentions=True,
+            output_attentions=False,
             max_new_tokens=max_new_tokens,
             min_new_tokens=2,
             do_sample=True,

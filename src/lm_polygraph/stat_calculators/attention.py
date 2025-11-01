@@ -62,6 +62,7 @@ class AttentionCalculator(StatCalculator):
         batch = {k: v.to(model.device()) for k, v in batch.items()}
         
         attentions = dependencies["attentions_all"]
+        start_index = dependencies["start_index"]
         cut_sequences = dependencies["greedy_tokens"]
         
         attn_features = []
@@ -106,8 +107,8 @@ class AttentionCalculator(StatCalculator):
                     c,
                 )
             )
-            
-            for j in range(1, c):
+            k = 1
+            for j in range(start_index+1, start_index+c):
                 start_idx = -j
                 end_idx = attentions[j][0].shape[-1]
                 prompt_len = attentions[0][0].shape[-2]
@@ -116,7 +117,7 @@ class AttentionCalculator(StatCalculator):
                     start_idx = prompt_len # prompt len
                     end_idx = start_idx + j
                 try:
-                    attn_mask[:, j, :j] = (
+                    attn_mask[:, k, :k] = (
                         torch.vstack(
                             [
                                 process_attention(attentions[j][layer][0][head][0], j, start_idx, end_idx, prompt_len)
@@ -125,12 +126,13 @@ class AttentionCalculator(StatCalculator):
                             ]
                         )
                         .cpu().float()
-                        .numpy()
+                        .numpy()[:, start_index:]
                     )
                 except:
                     print(traceback.format_exc())
                     raise ValueError
-            for j in range(c):
+                k += 1
+            for j in range(start_index, start_index+c):
                 lookback_ratios_token = []
                 
                 start_idx = -j
@@ -160,20 +162,21 @@ class AttentionCalculator(StatCalculator):
             attn_features_values_s = []
 
             attention_weights.append(max_attention)
-            for j in range(1, c):
-                attn_features.append(attn_mask[:, j, j - 1])
+            l = 1
+            for j in range(start_index+1, start_index+c):
+                attn_features.append(attn_mask[:, l, l - 1])
                 attn_features_max_values_i = []
                 attn_features_max_tokens_i = []
                 attn_features_values_i = []
                 for k in range(min(j, current_top_n)):
-                    attn_features_max_values_i.append(attn_mask[:, j, topk.indices[j][k].item()])                    
-                    attn_features_max_tokens_i.append(topk.indices[j][k].item())
-                    attn_features_values_i.append(attn_mask[:, j, j - k - 1]) 
+                    attn_features_max_values_i.append(attn_mask[:, l, topk.indices[l][k].item()])                    
+                    attn_features_max_tokens_i.append(topk.indices[l][k].item())
+                    attn_features_values_i.append(attn_mask[:, l, l - k - 1]) 
 
                 attn_features_max_values_s.append(attn_features_max_values_i)
                 attn_features_max_tokens_s.append(attn_features_max_tokens_i)
                 attn_features_values_s.append(attn_features_values_i)
-
+                l += 1
         attn_features_max_values.append(attn_features_max_values_s)
         attn_features_max_tokens.append(attn_features_max_tokens_s)
         attn_features_values.append(attn_features_values_s)
