@@ -1,10 +1,13 @@
 import numpy as np
 import torch
+import os
+import joblib
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 from sklearn.linear_model import LogisticRegressionCV
 from sklearn.model_selection import train_test_split
 from transformers import set_seed, AutoConfig
+from pathlib import Path
 
 from sklearn.decomposition import KernelPCA
 from sklearn.preprocessing import PowerTransformer
@@ -381,3 +384,193 @@ class Sheeps(Estimator):
             np.save(f'{self.cache_dir}/{folder_name}/eval_features_{eval_idx}.npy', eval_scores)
         ue = self.ue_predictor.predict_proba(eval_scores)[:, 1]
         return ue
+
+    def save_checkpoint(self, checkpoint_dir: str):
+        """
+        Save the entire SHEEPS model state to a checkpoint directory.
+
+        This saves all trained components including:
+        - Main configuration parameters
+        - All LayerSheeps models with their MLP weights
+        - Meta-classifier (logistic regression)
+        - PCA transformer (if dynamic features enabled)
+
+        Args:
+            checkpoint_dir (str): Directory to save checkpoint (will be created if not exists)
+
+        Returns:
+            str: Absolute path to checkpoint directory
+        """
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        print(f"Saving SHEEPS checkpoint to: {checkpoint_dir}")
+
+        config = {
+            'model_name': self.model_name,
+            'layers': self.layers,
+            'num_layers': len(self.layersheeps),
+            'embeddings_type': self.embeddings_type,
+            'device': str(self.device).split(':')[0],
+            'metric_thr': self.metric_thr,
+            'dev_size': self.dev_size,
+            'with_dynamic': self.with_dynamic,
+            'cache_dir': str(self.cache_dir) if self.cache_dir else None,
+            'is_fitted': self.is_fitted
+        }
+        joblib.dump(config, Path(checkpoint_dir) / 'main_config.pkl')
+        print("Main configuration saved")
+
+        # Save ALL layer weights
+        saved_layers = 0
+        for idx, ls in enumerate(self.layersheeps):
+            if not ls.is_fitted or not hasattr(ls, 'ue_predictor'):
+                print(f"Skipping layer {idx} (not fitted)")
+                continue
+
+            try:
+                mlp_model = ls.ue_predictor.model
+
+                state_dict = {k: v.cpu() for k, v in mlp_model.state_dict().items()}
+                torch.save(state_dict, Path(checkpoint_dir) / f'layer_{idx}_weights.pt')
+
+                meta = {
+                    'is_fitted': True,
+                    'n_features': mlp_model.pooling.attn.in_features,
+                    'layer_num': ls.layer,
+                    'layer_name': ls.layer_name,
+                    'device': str(ls.device).split(':')[0]
+                }
+                joblib.dump(meta, Path(checkpoint_dir) / f'layer_{idx}_meta.pkl')
+
+                print(f"Saved layer {idx} (layer_num={ls.layer})")
+                saved_layers += 1
+            except Exception as e:
+                print(f"FAILED to save layer {idx}: {str(e)}")
+                try:
+                    joblib.dump(ls.ue_predictor, Path(checkpoint_dir) / f'layer_{idx}_fallback.pkl')
+                    print(f"Fallback save successful for layer {idx}")
+                except Exception as fe:
+                    print(f"Fallback save FAILED for layer {idx}: {str(fe)}")
+
+        print(f"Successfully saved {saved_layers}/{len(self.layersheeps)} layers")
+
+        # Save meta-classifier
+        joblib.dump(self.ue_predictor, Path(checkpoint_dir) / 'meta_classifier.pkl')
+        print("Meta-classifier saved")
+
+        # Save PCA if exists
+        if self.with_dynamic and hasattr(self, 'pca'):
+            joblib.dump(self.pca, Path(checkpoint_dir) / 'pca.pkl')
+            print("PCA saved")
+
+        # Final summary
+        checkpoint_size = sum(f.stat().st_size for f in Path(checkpoint_dir).glob('*') if f.is_file())
+        abs_path = os.path.abspath(checkpoint_dir)
+        print(f"\nCHECKPOINT SAVE COMPLETE! Size: {checkpoint_size/1e6:.2f} MB")
+        print(f"Location: {abs_path}")
+        return abs_path
+
+    @classmethod
+    def load_checkpoint(cls, checkpoint_dir: str, target_device=None):
+        """
+        Load a SHEEPS model from checkpoint directory.
+
+        Creates a new instance with identical behavior to the saved model.
+        No retraining performed - uses saved weights directly.
+
+        Args:
+            checkpoint_dir (str): Directory containing checkpoint files
+            target_device (str, optional): Device to load model to (e.g., 'cuda', 'cpu').
+                                         If None, uses device from checkpoint config.
+
+        Returns:
+            Sheeps: Loaded model instance ready for inference
+        """
+        config = joblib.load(Path(checkpoint_dir) / 'main_config.pkl')
+        device = target_device or config['device']
+        print(f"\nLoading SHEEPS checkpoint to {device}...")
+        
+        new_model = cls(
+            model_name=config['model_name'],
+            layers=config['layers'],
+            embeddings_type=config['embeddings_type'],
+            device=device,
+            metric_thr=config['metric_thr'],
+            dev_size=config['dev_size'],
+            with_dynamic=config['with_dynamic'],
+            cache_dir=config['cache_dir']
+        )
+        new_model.is_fitted = True
+
+        for idx in range(config['num_layers']):
+            meta_path = Path(checkpoint_dir) / f'layer_{idx}_meta.pkl'
+            weights_path = Path(checkpoint_dir) / f'layer_{idx}_weights.pt'
+
+            if not meta_path.exists():
+                print(f"MISSING META for layer {idx} - skipping")
+                continue
+
+            meta = joblib.load(meta_path)
+            ls = new_model.layersheeps[idx]
+
+            ls.layer = meta['layer_num']
+            ls.layer_name = meta['layer_name']
+            ls.is_fitted = True
+
+            try:
+                model = MLP(n_features=meta['n_features'])
+                state_dict = torch.load(weights_path, map_location=device)
+                model.load_state_dict(state_dict)
+                model.to(device)
+                model.eval()
+
+                class ExactWrapper:
+                    def __init__(self, model, device):
+                        self.model = model
+                        self.device = device
+
+                    def predict(self, x, mask):
+                        """EXACTLY replicates the original SHEEPS inference behavior"""
+                        self.model.eval()
+                        with torch.no_grad():
+                            x = x.to(self.device)
+                            mask = mask.to(self.device)
+
+                            attn_logits = self.model.pooling.attn(x)
+                            attn_logits = attn_logits.masked_fill(mask.unsqueeze(-1).bool(), -1e9)
+
+                            attn_weights = torch.softmax(attn_logits, dim=1)
+                            pooled = (x * attn_weights).sum(dim=1)
+                            logits = self.model.output(pooled)
+                            probs = torch.softmax(logits, dim=1)
+                            return probs[:, 1].cpu().numpy()
+
+                ls.ue_predictor = ExactWrapper(model, device)
+                ls.device = device
+                print(f"Loaded layer {idx} (layer_num={ls.layer})")
+            except Exception as e:
+                print(f"FAILED to load layer {idx}: {str(e)}")
+                fallback_path = Path(checkpoint_dir) / f'layer_{idx}_fallback.pkl'
+                if fallback_path.exists():
+                    print("Attempting fallback load...")
+                    try:
+                        ls.ue_predictor = joblib.load(fallback_path)
+                        if hasattr(ls.ue_predictor, 'model'):
+                            ls.ue_predictor.model.to(device)
+                            ls.ue_predictor.model.eval()
+                        print("Fallback load successful")
+                    except Exception as fe:
+                        print(f"Fallback load failed: {str(fe)}")
+
+        # Load meta-classifier
+        new_model.ue_predictor = joblib.load(Path(checkpoint_dir) / 'meta_classifier.pkl')
+        print("Meta-classifier loaded")
+
+        # Load PCA if exists
+        if config['with_dynamic']:
+            pca_path = Path(checkpoint_dir) / 'pca.pkl'
+            if pca_path.exists():
+                new_model.pca = joblib.load(pca_path)
+                print("PCA loaded")
+
+        print("SHEEPS CHECKPOINT LOADED SUCCESSFULLY")
+        return new_model

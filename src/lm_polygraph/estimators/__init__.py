@@ -90,6 +90,7 @@ from .semantic_density import SemanticDensity
 from .supervised.saplma import SAPLMA
 from .supervised.mind import MIND
 from .supervised.sheeps import Sheeps
+from .supervised.intra import Intra
 from .supervised.token_mahalanobis_distance import TokenMahalanobisDistance
 from .supervised.relative_token_mahalanobis_distance import (
     RelativeTokenMahalanobisDistance,
