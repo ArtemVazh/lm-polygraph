@@ -99,7 +99,6 @@ class Intra(Estimator):
             if hasattr(self.model_config, "num_hidden_layers")
             else self.model_config.text_config.num_hidden_layers
         )
-
         # Layer selection strategy
         if layers is not None:
             # Use exact layer numbers provided
@@ -200,7 +199,7 @@ class Intra(Estimator):
         )
 
     def __str__(self):
-        return f"Intra_{self.embeddings_type}"
+        return f"Intra_{self.layer_selection}_{self.embeddings_type}"
 
     def _create_layer_model(self, layer: int):
         """Create a SHEEPS-style layer model for the specified layer."""
@@ -357,7 +356,7 @@ class Intra(Estimator):
             layer_stats = self._prepare_layer_stats(stats, layer)
 
             # Get probabilities from this layer
-            layer_probs = self.layer_models[layer](layer_stats, batch_size=batch_size)
+            layer_probs = self.layer_models[layer](layer_stats)
             layer_probabilities.append(layer_probs)
 
         # Stack layer probabilities
