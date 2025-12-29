@@ -47,17 +47,22 @@ class MLP(nn.Module):
     MLP classifier with attention pooling for sequence-level uncertainty estimation.
     """
 
-    def __init__(self, n_features: int = 4096):
+    def __init__(self, n_features: int = 4096, regression: bool = False):
         super().__init__()
         self.pooling = AttentionPooling(n_features)
-        self.output = nn.Linear(n_features, 2)
+        if regression:
+            self.output = nn.Linear(n_features, 1)
+        else:
+            self.output = nn.Linear(n_features, 2)
         self.activation = nn.Softmax(dim=1)
 
     def forward(self, x, mask, eval: bool = False, regression: bool = False):
         x = self.pooling(x, mask)
         x = self.output(x)
-        if eval:
+        if eval and not regression:
             return self.activation(x)[:, 1]
+        if regression:
+            return x.squeeze(1)
         return x
 
 
@@ -76,6 +81,7 @@ class LayerSheeps(Estimator):
         layer: int = -1,
         device: str = "cuda",
         metric_thr: float = 0.3,
+        regression: bool = False,
     ):
         super().__init__(
             ["token_embeddings", "train_token_embeddings", "train_metrics"], "sequence"
@@ -93,7 +99,11 @@ class LayerSheeps(Estimator):
             "n_features": [4096],
         }
 
-        self.loss_fn = nn.CrossEntropyLoss()
+        self.regression = regression
+        if self.regression:
+            self.loss_fn = nn.MSELoss()
+        else:
+            self.loss_fn = nn.CrossEntropyLoss()
         self.model_init = lambda param: TrainerMLP(
             n_epochs=param[0],
             batch_size=param[1],
@@ -101,7 +111,7 @@ class LayerSheeps(Estimator):
             n_features=param[3],
             device=self.device,
             loss_fn=self.loss_fn,
-            model=MLP,
+            model=lambda x: MLP(x, regression=self.regression),
         )
 
     def __str__(self):
@@ -121,8 +131,8 @@ class LayerSheeps(Estimator):
         if not self.is_fitted:
             train_metrics = stats["train_metrics"]
             train_greedy_tokens = stats["train_greedy_tokens"]
-
-            train_metrics = (train_metrics < self.metric_thr).astype(int)
+            if not self.regression:
+                train_metrics = (train_metrics < self.metric_thr).astype(int)
             train_embeddings = stats[
                 f"train_token_embeddings_{self.embeddings_type}{self.layer_name}"
             ]
@@ -151,13 +161,13 @@ class LayerSheeps(Estimator):
                 train_metrics,
                 self.model_init,
                 self.params,
-                regression=False,
+                regression=self.regression,
                 mask=attention_mask,
                 estimator_name=self.__str__(),
             )
             self.ue_predictor = self.model_init(best_params)
 
-            self.ue_predictor.fit(aggregated_embeddings, train_metrics, attention_mask)
+            self.ue_predictor.fit(aggregated_embeddings, train_metrics, attention_mask, regression=self.regression)
             self.is_fitted = True
         # Inference
         embeddings = stats[f"token_embeddings_{self.embeddings_type}{self.layer_name}"]
@@ -180,7 +190,7 @@ class LayerSheeps(Estimator):
             attention_mask[i, l:] = 1
 
         attention_mask = torch.from_numpy(attention_mask).int()
-        ue = self.ue_predictor.predict(aggregated_embeddings, attention_mask)
+        ue = self.ue_predictor.predict(aggregated_embeddings, attention_mask, regression=self.regression)
 
         return ue
 

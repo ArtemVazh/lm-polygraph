@@ -91,6 +91,7 @@ from .supervised.saplma import SAPLMA
 from .supervised.mind import MIND
 from .supervised.sheeps import Sheeps
 from .supervised.intra import Intra
+from .supervised.intra_dynamic import IntraDynamic
 from .supervised.token_mahalanobis_distance import TokenMahalanobisDistance
 from .supervised.relative_token_mahalanobis_distance import (
     RelativeTokenMahalanobisDistance,
